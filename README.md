@@ -60,12 +60,14 @@ src/
 
 - [x] Vue3 + TS + Pinia 工程化分层（Day 1–2）
 - [x] 1920×1080 等比缩放自适应（`useScale` + ResizeObserver）
+- [x] 组件化重构：抽取布局组件 + 数据配置中心（Day 3–4）
+- [x] 图表层工程化：ECharts 按需引入 + vendor 分包（Day 4）
 - [ ] 配置驱动通用图表组件（6+ 类型）—— Day 5
 - [ ] 地图与真实自适应 —— Day 6
 - [ ] Pinia + 请求层驱动真实数据 —— Day 7
 - [ ] AI 自然语言出图（LLM → 配置 JSON → 渲染）—— Day 8–10
 - [ ] SSE 流式对话 + 中断 + Markdown —— Day 11–12
-- [ ] 性能优化（懒渲染 / dataset 增量 / 按需引入）—— Day 7–14
+- [ ] 性能优化（懒渲染 / dataset 增量更新）—— Day 7–14
 - [ ] 部署上线（GitHub Pages / Vercel）
 
 ## 规划与复盘

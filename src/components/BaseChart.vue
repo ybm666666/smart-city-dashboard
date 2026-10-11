@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, toRef } from 'vue'
+import { ref, toRef, type Ref } from 'vue'
 import { useEcharts, type ChartOption } from '@/hooks/useEcharts'
 
 interface Props {
@@ -9,7 +9,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), { height: '100%' })
 
 const el = ref<HTMLElement>()
-const optionRef = toRef(props, 'option') as unknown as import('vue').Ref<ChartOption>
+// Day4：用 toRef 直接取 props.option 的响应式引用，去掉原来的强制类型转换
+const optionRef: Ref<ChartOption> = toRef(props, 'option')
 useEcharts(el, optionRef)
 </script>
 

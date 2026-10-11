@@ -21,5 +21,21 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    // Day4：vendor 分包，把 echarts / vue 拆成独立 chunk，便于缓存、避免超大单包
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            if (id.includes('echarts') || id.includes('zrender')) return 'echarts'
+            if (id.includes('vue') || id.includes('pinia')) return 'vue'
+            return 'vendor'
+          }
+        }
+      }
+    },
+    // 按需引入后单包体积下降，阈值设 600KB，超出才告警
+    chunkSizeWarningLimit: 600
   }
 })
