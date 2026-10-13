@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 
-// 顶栏：标题 + 实时时间（Day3 从 DashboardLayout 抽出）
+// 顶栏：标题 + 导航 + 实时时间（Day3 从 DashboardLayout 抽出）
 const now = ref(new Date().toLocaleString('zh-CN'))
 let timer: number | undefined
 
@@ -18,6 +18,10 @@ onBeforeUnmount(() => {
 
 <template>
   <header class="header">
+    <nav class="nav">
+      <router-link to="/">数据大屏</router-link>
+      <router-link to="/gallery">图表图库</router-link>
+    </nav>
     <h1>AI 数据可视化大屏</h1>
     <div class="datetime">{{ now }}</div>
   </header>
@@ -43,5 +47,22 @@ h1 {
   transform: translateY(-50%);
   font-size: 14px;
   color: #7eb8d8;
+}
+.nav {
+  position: absolute;
+  left: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 18px;
+}
+.nav a {
+  font-size: 14px;
+  color: #7eb8d8;
+  text-decoration: none;
+}
+.nav a.router-link-active {
+  color: #00d4ff;
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
 }
 </style>

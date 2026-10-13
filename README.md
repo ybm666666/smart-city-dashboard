@@ -45,15 +45,15 @@ VITE_LLM_MODEL=deepseek-chat
 src/
 ├─ api/          # 服务层：Axios 实例 + 拦截器、LLM 调用（普通/SSE 流式）
 ├─ assets/       # 全局样式
-├─ components/   # 通用组件：BaseChart / ChartPanel / StatIndicator
-├─ config/       # 配置驱动：buildOption 图表工厂
+├─ components/   # 通用组件：BaseChart / ConfigChart / ChartPanel / StatIndicator
+├─ config/       # 配置驱动：buildOption 图表工厂 + 示例配置 demos
 ├─ hooks/        # 组合式函数：useEcharts / useScale / useSSE
 ├─ layouts/      # 布局层：DashboardLayout（1920×1080 等比缩放）
 ├─ router/       # 路由（hash 模式）
 ├─ stores/       # Pinia：useDashboardStore
 ├─ types/        # 全局 TS 类型
 ├─ utils/        # 工具：chartSchema（Schema 校验 + 降级兜底）
-└─ views/        # 页面：DashboardView / AiChatView
+└─ views/        # 页面：DashboardView / ChartGalleryView / AiChatView
 ```
 
 ## 功能进度
@@ -62,7 +62,7 @@ src/
 - [x] 1920×1080 等比缩放自适应（`useScale` + ResizeObserver）
 - [x] 组件化重构：抽取布局组件 + 数据配置中心（Day 3–4）
 - [x] 图表层工程化：ECharts 按需引入 + vendor 分包（Day 4）
-- [ ] 配置驱动通用图表组件（6+ 类型）—— Day 5
+- [x] 配置驱动通用图表组件（7 类型）+ 图表图库（Day 5）
 - [ ] 地图与真实自适应 —— Day 6
 - [ ] Pinia + 请求层驱动真实数据 —— Day 7
 - [ ] AI 自然语言出图（LLM → 配置 JSON → 渲染）—— Day 8–10

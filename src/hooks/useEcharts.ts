@@ -1,27 +1,41 @@
 import { onBeforeUnmount, onMounted, shallowRef, watch, type Ref } from 'vue'
 import * as echarts from 'echarts/core'
-import { LineChart, BarChart, PieChart, ScatterChart } from 'echarts/charts'
+import {
+  LineChart,
+  BarChart,
+  PieChart,
+  ScatterChart,
+  GaugeChart,
+  RadarChart,
+  FunnelChart
+} from 'echarts/charts'
 import {
   GridComponent,
   TooltipComponent,
   LegendComponent,
   TitleComponent,
-  DatasetComponent
+  DatasetComponent,
+  RadarComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
 // Day4：ECharts 按需引入 —— 只注册用到的图表与组件，显著减小打包体积
 // （替代原来 `import * as echarts from 'echarts'` 的全量引入）
+// Day5：随「配置驱动通用图表组件（6+ 类型）」补充仪表盘 / 雷达 / 漏斗图与雷达坐标系
 echarts.use([
   LineChart,
   BarChart,
   PieChart,
   ScatterChart,
+  GaugeChart,
+  RadarChart,
+  FunnelChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
   TitleComponent,
   DatasetComponent,
+  RadarComponent,
   CanvasRenderer
 ])
 

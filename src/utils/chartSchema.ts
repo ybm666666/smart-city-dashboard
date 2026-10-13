@@ -1,6 +1,16 @@
 import type { ChartConfig, ChartType } from '@/types'
 
-const VALID_TYPES: ChartType[] = ['line', 'bar', 'pie', 'scatter', 'map', 'gauge']
+// Day5：与 config/charts 的 buildOption 保持一致，覆盖 6+ 图表类型（map 留给 Day6）
+const VALID_TYPES: ChartType[] = [
+  'line',
+  'bar',
+  'pie',
+  'scatter',
+  'gauge',
+  'radar',
+  'funnel',
+  'map'
+]
 
 /**
  * 校验大模型返回的图表配置。
