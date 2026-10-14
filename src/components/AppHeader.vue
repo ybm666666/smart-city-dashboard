@@ -2,6 +2,7 @@
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 
 // 顶栏：标题 + 导航 + 实时时间（Day3 从 DashboardLayout 抽出）
+// Day5：新增「图表图库」入口；Day6：新增「地图联动」入口
 const now = ref(new Date().toLocaleString('zh-CN'))
 let timer: number | undefined
 
@@ -21,6 +22,7 @@ onBeforeUnmount(() => {
     <nav class="nav">
       <router-link to="/">数据大屏</router-link>
       <router-link to="/gallery">图表图库</router-link>
+      <router-link to="/map">地图联动</router-link>
     </nav>
     <h1>AI 数据可视化大屏</h1>
     <div class="datetime">{{ now }}</div>

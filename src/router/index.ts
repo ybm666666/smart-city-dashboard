@@ -13,6 +13,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ChartGalleryView.vue')
   },
   {
+    // Day6：地图联动演示页（GeoJSON 热力地图 + 区县详情联动）
+    path: '/map',
+    name: 'map-view',
+    component: () => import('@/views/MapView.vue')
+  },
+  {
     path: '/ai',
     name: 'ai-chat',
     component: () => import('@/views/AiChatView.vue')

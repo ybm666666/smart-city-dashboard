@@ -1,13 +1,13 @@
 # AI 数据可视化大屏 · Smart City Dashboard
 
-基于 Vue3 + TypeScript 的智慧城市数据大屏，前端工程化实践项目。支持大屏数据可视化、AI 自然语言出图与流式对话（开发中）。
+基于 Vue3 + TypeScript 的智慧城市数据大屏，前端工程化实践项目。支持大屏数据可视化、GeoJSON 地图热力与联动、AI 自然语言出图与流式对话（开发中）。
 
 ## 技术栈
 
 - **框架**：Vue 3（`<script setup>` 组合式 API）+ Vite
 - **语言**：TypeScript
 - **状态管理**：Pinia
-- **图表**：ECharts 5
+- **图表**：ECharts 5（按需引入，含 Geo / 地图 / 热力组件）
 - **路由**：Vue Router 4（hash 模式）
 - **请求层**：Axios（拦截器统一鉴权/异常处理）
 
@@ -45,15 +45,15 @@ VITE_LLM_MODEL=deepseek-chat
 src/
 ├─ api/          # 服务层：Axios 实例 + 拦截器、LLM 调用（普通/SSE 流式）
 ├─ assets/       # 全局样式
-├─ components/   # 通用组件：BaseChart / ConfigChart / ChartPanel / StatIndicator
-├─ config/       # 配置驱动：buildOption 图表工厂 + 示例配置 demos
-├─ hooks/        # 组合式函数：useEcharts / useScale / useSSE
-├─ layouts/      # 布局层：DashboardLayout（1920×1080 等比缩放）
+├─ components/   # 通用组件：BaseChart / ChartPanel / ConfigChart / MapChart / StatIndicator
+├─ config/       # 配置驱动：buildOption 图表工厂 + 示例配置 demos + 地图数据 mapData
+├─ hooks/        # 组合式函数：useEcharts / useScale / useResponsive / useMap
+├─ layouts/      # 布局层：DashboardLayout（大屏等比缩放 + 小屏流式布局）
 ├─ router/       # 路由（hash 模式）
 ├─ stores/       # Pinia：useDashboardStore
 ├─ types/        # 全局 TS 类型
 ├─ utils/        # 工具：chartSchema（Schema 校验 + 降级兜底）
-└─ views/        # 页面：DashboardView / ChartGalleryView / AiChatView
+└─ views/        # 页面：DashboardView / ChartGalleryView / MapView / AiChatView
 ```
 
 ## 功能进度
@@ -63,12 +63,20 @@ src/
 - [x] 组件化重构：抽取布局组件 + 数据配置中心（Day 3–4）
 - [x] 图表层工程化：ECharts 按需引入 + vendor 分包（Day 4）
 - [x] 配置驱动通用图表组件（7 类型）+ 图表图库（Day 5）
-- [ ] 地图与真实自适应 —— Day 6
+- [x] 地图与真实自适应：GeoJSON 热力地图 + 区县联动 + CSS Grid/Flex 流式布局（Day 6）
 - [ ] Pinia + 请求层驱动真实数据 —— Day 7
 - [ ] AI 自然语言出图（LLM → 配置 JSON → 渲染）—— Day 8–10
 - [ ] SSE 流式对话 + 中断 + Markdown —— Day 11–12
 - [ ] 性能优化（懒渲染 / dataset 增量更新）—— Day 7–14
 - [ ] 部署上线（GitHub Pages / Vercel）
+
+## 地图说明（Day 6）
+
+- 地图 GeoJSON 采用运行时异步加载（阿里云 DataV.GeoAtlas），并用 `sessionStorage` 缓存，
+  不打包进 bundle，避免主包体积膨胀（呼应 Day 4 的按需引入 / 分包思路）。
+- `useMap` 负责「加载 → `echarts.registerMap` → 幂等复用」；`MapChart` 负责注册完成后再渲染，
+  并对加载中 / 加载失败给出状态提示。
+- 点击地图区县会触发 `chart-click`，联动展示该区县的指标详情（GDP / 人口 / 综合指数 / 产业结构）。
 
 ## 规划与复盘
 

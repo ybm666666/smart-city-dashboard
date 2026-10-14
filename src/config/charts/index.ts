@@ -19,6 +19,7 @@ export const palette = [
 ]
 
 // Day5：配置驱动通用图表组件支持的类型清单（6+）
+// Day6：新增 map（地图热力，GeoJSON 需先注册）
 export const CHART_TYPE_LIST = [
   'line',
   'bar',
@@ -26,7 +27,8 @@ export const CHART_TYPE_LIST = [
   'scatter',
   'gauge',
   'radar',
-  'funnel'
+  'funnel',
+  'map'
 ] as const
 
 const axisLine = { lineStyle: { color: 'rgba(0, 150, 255, 0.3)' } }
@@ -45,6 +47,10 @@ type ChartData = {
   gauge?: { value: number; max?: number; unit?: string }
   indicators?: { name: string; max: number }[]
   radarData?: number[]
+  // Day6：地图
+  mapName?: string
+  mapData?: NameValue[]
+  visualMap?: { min: number; max: number }
 }
 
 function titleOf(title?: string): ChartOption {
@@ -81,6 +87,7 @@ function normalizeSeries(type: string, d: ChartData): ChartOption[] {
  * （对应简历：封装配置驱动通用图表组件）
  *
  * Day5：扩展为覆盖 7 种图表类型（line / bar / pie / scatter / gauge / radar / funnel）；
+ * Day6：新增 map（GeoJSON 地图 + visualMap 热力），需配合 useMap 先注册地图；
  * 未知或非法类型统一降级为柱状图兜底，保证「非法配置不崩页」。
  */
 export function buildOption(type: string, data: unknown): ChartOption {
@@ -212,6 +219,51 @@ export function buildOption(type: string, data: unknown): ChartOption {
           }
         ]
       }
+
+    // 地图（Day6）：GeoJSON 需先经 useMap → echarts.registerMap 注册
+    case 'map': {
+      const vm = d.visualMap
+      const nums = (d.mapData || []).map((i) => i.value)
+      const min = vm?.min ?? (nums.length ? Math.min(...nums) : 0)
+      const max = vm?.max ?? (nums.length ? Math.max(...nums) : 100)
+      return {
+        ...base,
+        color: palette,
+        tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+        visualMap: {
+          min,
+          max,
+          left: 12,
+          bottom: 12,
+          calculable: true,
+          text: ['高', '低'],
+          textStyle: { color: '#7eb8d8' },
+          inRange: { color: ['#0b3d66', '#00d4ff'] }
+        },
+        series: [
+          {
+            type: 'map',
+            map: d.mapName || 'chongqing',
+            roam: true,
+            zoom: 1.1,
+            label: { show: false },
+            itemStyle: {
+              areaColor: '#0d2a44',
+              borderColor: 'rgba(0, 212, 255, 0.4)'
+            },
+            emphasis: {
+              label: { show: true, color: '#ffffff' },
+              itemStyle: { areaColor: theme.orange }
+            },
+            select: {
+              label: { show: true, color: '#ffffff' },
+              itemStyle: { areaColor: theme.green }
+            },
+            data: d.mapData || []
+          }
+        ]
+      }
+    }
 
     // 兜底：未知类型降级为柱状图，保证不崩页
     default:

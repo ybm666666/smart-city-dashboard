@@ -1,6 +1,7 @@
 import type { ChartConfig, ChartType } from '@/types'
 
-// Day5：与 config/charts 的 buildOption 保持一致，覆盖 6+ 图表类型（map 留给 Day6）
+// Day5：与 config/charts 的 buildOption 保持一致，覆盖 6+ 图表类型
+// Day6：补充 map（GeoJSON 地图热力）
 const VALID_TYPES: ChartType[] = [
   'line',
   'bar',
