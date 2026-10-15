@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import BaseChart from '@/components/BaseChart.vue'
+import { storeToRefs } from 'pinia'
 import ChartPanel from '@/components/ChartPanel.vue'
-import { populationOption, trafficOption } from '@/config/dashboard'
+import ConfigChart from '@/components/ConfigChart.vue'
+import PanelState from '@/components/PanelState.vue'
+import { useDashboardStore } from '@/stores/dashboard'
+
+// Day7：数据来自 Pinia（请求层注入）
+const store = useDashboardStore()
+const { populationConfig, trafficConfig } = storeToRefs(store)
 </script>
 
 <template>
   <section class="panel side">
     <ChartPanel title="常住人口统计（万人）">
-      <BaseChart :option="populationOption" />
+      <PanelState :empty="!populationConfig">
+        <ConfigChart v-if="populationConfig" :config="populationConfig" />
+      </PanelState>
     </ChartPanel>
     <ChartPanel title="交通运行指数">
-      <BaseChart :option="trafficOption" />
+      <PanelState :empty="!trafficConfig">
+        <ConfigChart v-if="trafficConfig" :config="trafficConfig" />
+      </PanelState>
     </ChartPanel>
   </section>
 </template>

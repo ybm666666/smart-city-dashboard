@@ -35,6 +35,7 @@ export interface RadarIndicator {
 // AI 出图的图表配置（由大模型返回，前端校验后渲染）
 // Day5：配置驱动 —— 一份配置描述「类型 + 数据」，即可渲染出对应图表
 // Day6：新增地图相关字段（mapName / mapUrl / mapData / visualMap）
+// Day7：新增 dataset（ECharts 数据集，二维表），用 dataset + encode 渲染，支持增量更新
 export interface ChartConfig {
   type: ChartType
   title?: string
@@ -58,6 +59,38 @@ export interface ChartConfig {
   mapData?: NameValue[]
   /** 地图热力 visualMap 区间（map，Day6） */
   visualMap?: { min: number; max: number }
+  /** ECharts dataset 源数据（Day7）：首行为表头，之后每行一条记录 */
+  dataset?: (string | number)[][]
+}
+
+// 底部指标（Day3 起用；Day7 随数据层抽到全局类型）
+export interface Indicator {
+  label: string
+  value: number
+  unit?: string
+  decimals?: number
+}
+
+// Day7：大屏数据契约 —— 请求层返回、Pinia 存储，替代原静态配置
+export interface DashboardData {
+  /** GDP 趋势（line） */
+  gdp: ChartConfig
+  /** 产业结构（pie） */
+  industry: ChartConfig
+  /** 区县总览（bar） */
+  region: ChartConfig
+  /** 常住人口（bar） */
+  population: ChartConfig
+  /** 交通运行指数（line） */
+  traffic: ChartConfig
+  /** 底部指标 */
+  indicators: Indicator[]
+}
+
+// Day7：实时数据点（dataset 增量更新演示）
+export interface RealtimePoint {
+  time: string
+  value: number
 }
 
 // 对话消息

@@ -51,6 +51,8 @@ type ChartData = {
   mapName?: string
   mapData?: NameValue[]
   visualMap?: { min: number; max: number }
+  // Day7：ECharts dataset 源数据（二维表，首行为表头），配合 encode 支持增量更新
+  dataset?: (string | number)[][]
 }
 
 function titleOf(title?: string): ChartOption {
@@ -104,9 +106,20 @@ export function buildOption(type: string, data: unknown): ChartOption {
         tooltip: { trigger: 'axis' },
         legend,
         grid: { left: '12%', right: '5%', top: gridTop(!!d.title), bottom: '15%' },
-        xAxis: { type: 'category', data: d.xAxis, axisLine, axisLabel },
-        yAxis: { type: 'value', axisLine, axisLabel, splitLine },
-        series: normalizeSeries(type, d)
+        // Day7：提供 dataset（二维表）时用 dataset + encode 驱动，支持增量更新；
+        //        否则回落到 series / xAxis 的常规写法
+        ...(d.dataset
+          ? {
+              dataset: { source: d.dataset },
+              xAxis: { type: 'category', axisLine, axisLabel },
+              yAxis: { type: 'value', axisLine, axisLabel, splitLine },
+              series: [{ type, smooth: type === 'line', encode: { x: 0, y: 1 } }]
+            }
+          : {
+              xAxis: { type: 'category', data: d.xAxis, axisLine, axisLabel },
+              yAxis: { type: 'value', axisLine, axisLabel, splitLine },
+              series: normalizeSeries(type, d)
+            })
       }
 
     // 饼图

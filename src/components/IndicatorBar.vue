@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import StatIndicator from '@/components/StatIndicator.vue'
-import { indicators } from '@/config/dashboard'
+import { useDashboardStore } from '@/stores/dashboard'
+
+// Day7：底部指标改为消费 Pinia 中的实时数据（原静态配置已迁到数据层）
+const store = useDashboardStore()
+const { indicatorList } = storeToRefs(store)
 </script>
 
 <template>
   <footer class="footer">
-    <StatIndicator v-for="it in indicators" :key="it.label" v-bind="it" />
+    <StatIndicator v-for="it in indicatorList" :key="it.label" v-bind="it" />
   </footer>
 </template>
 
