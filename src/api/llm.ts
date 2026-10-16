@@ -1,6 +1,6 @@
-import type { ChatMessage } from '@/types'
+import type { ChartConfig, ChatMessage } from '@/types'
 import { post } from './http'
-import { mockChartFromPrompt } from '@/mock/llm'
+import { mockChartFromPrompt, mockRefine } from '@/mock/llm'
 
 const BASE_URL = import.meta.env.VITE_LLM_BASE_URL
 const API_KEY = import.meta.env.VITE_LLM_API_KEY
@@ -91,13 +91,15 @@ export const CHART_TOOL = {
   }
 } as const
 
-const SYSTEM_PROMPT = `你是数据可视化助手。请根据用户的一句话需求，调用 render_chart 工具返回一份图表配置。要求：
+const SYSTEM_PROMPT = `你是数据可视化助手。请根据用户的需求，调用 render_chart 工具返回一份图表配置。要求：
 - 只通过工具返回配置，不要输出多余解释；
 - type 只能是 line / bar / pie / scatter / gauge / radar / funnel 之一；
 - line/bar/scatter 必须给出 xAxis 与 series；
 - pie/funnel 必须给出 data（每项含 name 与 value）；
 - gauge 必须给出 gauge.value；
 - radar 必须给出 indicators 与 radarData；
+- 若对话中已存在「当前图表配置」，且用户是在此基础上做修改（改标题 / 换类型 / 增删数据 / 调整数值），
+  请沿用原有数据结构，只改动用户要求的部分；
 - 若用户未提供具体数据，可构造一组合理的示例数据。`
 
 interface ChatCompletionResponse {
@@ -109,28 +111,60 @@ interface ChatCompletionResponse {
   }[]
 }
 
+/** Day9：出图/微调的上下文 */
+export interface ChartGenContext {
+  /** 之前的多轮对话（不含本轮用户输入） */
+  history?: ChatMessage[]
+  /** 当前已渲染的图表配置（用于在多轮中「基于它修改」） */
+  current?: ChartConfig | null
+}
+
 function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
+// 判断一句话是否为「在既有图表上微调」的意图
+function isRefineIntent(text: string): boolean {
+  return /改成|改为|换成|换一|换为|标题|追加|增加|再加|添加|新增|删|去掉|移除|类型|折线|柱状|柱形|条形|饼|散点|仪表|雷达|漏斗/.test(
+    text
+  )
+}
+
 /**
- * Day8：自然语言 → 图表配置（原始结果）。
- * 返回原始对象 / JSON 字符串，统一交给 validateChartConfig 校验清洗。
- * - 无 Key 或开启 Mock：走内置规则生成；
- * - 有 Key：走 Function Calling（tool_choice 强制调用 render_chart）。
+ * Day8/Day9：自然语言 → 图表配置（原始结果）。
+ * - 无 Key 或开启 Mock：走内置规则生成；已有图表且是微调指令时走本地微调 Mock；
+ * - 有 Key：走 Function Calling，并把「多轮上下文 + 当前配置」一并交给模型，实现多轮微调。
  */
-export async function generateChartConfig(userText: string): Promise<unknown> {
+export async function generateChartConfig(
+  userText: string,
+  ctx: ChartGenContext = {}
+): Promise<unknown> {
   if (useMockLlm()) {
     await delay(600)
+    if (ctx.current && isRefineIntent(userText)) {
+      return mockRefine(ctx.current, userText)
+    }
     return mockChartFromPrompt(userText)
   }
 
+  const history = (ctx.history ?? []).filter((m) => m.role !== 'system')
+  const messages: ChatMessage[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...(ctx.current
+      ? [
+          {
+            role: 'system' as const,
+            content: `当前图表配置（供修改参考）：\n${JSON.stringify(ctx.current)}`
+          }
+        ]
+      : []),
+    ...history,
+    { role: 'user', content: userText }
+  ]
+
   const res = await post<ChatCompletionResponse>(`${BASE_URL}/chat/completions`, {
     model: MODEL,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userText }
-    ],
+    messages,
     tools: [CHART_TOOL],
     tool_choice: { type: 'function', function: { name: 'render_chart' } }
   })
