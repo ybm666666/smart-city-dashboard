@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_LLM_BASE_URL: string
   readonly VITE_LLM_API_KEY: string
   readonly VITE_LLM_MODEL: string
+  // Day8：AI 出图，显式强制使用内置 Mock（true 时跳过真实大模型）
+  readonly VITE_USE_MOCK_LLM: string
   // Day7：数据层（无后端时用内置 Mock，可切换空态 / 错误态场景）
   readonly VITE_USE_MOCK: string
   readonly VITE_MOCK_SCENARIO: string

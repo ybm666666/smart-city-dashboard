@@ -66,7 +66,7 @@ src/
 - [x] 配置驱动通用图表组件（7 类型）+ 图表图库（Day 5）
 - [x] 地图与真实自适应：GeoJSON 热力地图 + 区县联动 + CSS Grid/Flex 流式布局（Day 6）
 - [x] Pinia + 请求层驱动真实数据（含加载 / 错误 / 空态，Mock 可切换）—— Day 7
-- [ ] AI 自然语言出图（LLM → 配置 JSON → 渲染）—— Day 8–10
+- [x] AI 自然语言出图（LLM Function Calling → 配置 JSON → 校验 → 渲染；无 Key 走 Mock）—— Day 8
 - [ ] SSE 流式对话 + 中断 + Markdown —— Day 11–12
 - [x] 性能优化：图表懒渲染（IntersectionObserver）+ dataset 增量更新 —— Day 7
 - [ ] 部署上线（GitHub Pages / Vercel）
@@ -87,6 +87,17 @@ src/
   通过 `.env` 的 `VITE_MOCK_SCENARIO=normal|empty|error` 可本地预览三态。
 - **性能优化**：`useInView`（IntersectionObserver）让图表进入视口后才初始化实例（懒渲染）；
   `buildOption` 支持 `dataset` + `encode`，配合 `setOption({ lazyUpdate })` 做增量更新。
+
+## AI 出图（Day 8）
+
+- 进入 `/#/ai`：用一句话描述需求，AI 生成图表并实时预览，可展开查看配置 JSON。
+- 链路：**自然语言 → 请求层出图 → 配置校验 → Pinia → 渲染**。
+  - `api/llm.ts`：`generateChartConfig()` 走 OpenAI 兼容的 **Function Calling**（`render_chart` 工具），
+    强制模型返回结构化配置；
+  - `utils/chartSchema.ts`：`extractJson` + 按类型深度校验 / 归一化，非法配置返回 `null`；
+  - `stores/ai.ts`：维护对话 / 加载 / 错误态，校验失败时用 `fallbackChartConfig()` **降级兜底**，保证不崩页。
+- **无 Key 可演示**：未配置有效 API Key（或 `VITE_USE_MOCK_LLM=true`）时自动走 `mock/llm.ts`
+  的关键词规则出图，流程与真实模型一致。
 
 ## 规划与复盘
 

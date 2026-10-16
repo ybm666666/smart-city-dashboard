@@ -1,0 +1,85 @@
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
+import { generateChartConfig, useMockLlm } from '@/api/llm'
+import { fallbackChartConfig, validateChartConfig } from '@/utils/chartSchema'
+import type { ChartConfig, ChatMessage } from '@/types'
+
+/**
+ * Day8：AI 出图状态
+ *
+ * 流程：用户输入 → 请求层出图（LLM / Mock）→ 配置校验 → 存 Pinia → 视图渲染。
+ * 统一维护对话消息、加载态、错误态，以及「非法配置降级兜底」。
+ */
+export const useAiStore = defineStore('ai', () => {
+  const messages = ref<ChatMessage[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+  // 当前要渲染的图表配置（AI 生成 + 校验后）
+  const chartConfig = ref<ChartConfig | null>(null)
+  // 是否使用了降级兜底图表（模型输出非法时）
+  const usedFallback = ref(false)
+
+  const mockMode = computed(() => useMockLlm())
+  const hasChart = computed(() => chartConfig.value !== null)
+
+  // 快捷示例，降低体验门槛
+  const examples = [
+    '用折线图看近半年 GDP 趋势',
+    '用饼图展示产业结构占比',
+    '用雷达图评估城市综合能力',
+    '用仪表盘展示智慧城市覆盖率',
+    '用柱状图对比各区县数据'
+  ]
+
+  async function send(text: string) {
+    const content = text.trim()
+    if (!content || loading.value) return
+
+    error.value = null
+    usedFallback.value = false
+    messages.value.push({ role: 'user', content })
+    loading.value = true
+
+    try {
+      const raw = await generateChartConfig(content)
+      const cfg = validateChartConfig(raw)
+      if (!cfg) throw new Error('模型返回的图表配置不合法')
+      chartConfig.value = cfg
+      messages.value.push({
+        role: 'assistant',
+        content: `已生成「${cfg.title || cfg.type}」图表，请在右侧预览。`
+      })
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '出图失败'
+      // 降级兜底：非法配置不崩页
+      chartConfig.value = fallbackChartConfig()
+      usedFallback.value = true
+      messages.value.push({
+        role: 'assistant',
+        content: `出图失败：${error.value}，已展示降级默认图表。`
+      })
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function reset() {
+    messages.value = []
+    chartConfig.value = null
+    error.value = null
+    usedFallback.value = false
+  }
+
+  return {
+    messages,
+    loading,
+    error,
+    chartConfig,
+    usedFallback,
+    mockMode,
+    hasChart,
+    examples,
+    send,
+    reset
+  }
+})
