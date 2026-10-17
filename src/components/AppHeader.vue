@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { prefetchView, type ViewName } from '@/router'
 
 // 顶栏：标题 + 导航 + 实时时间（Day3 从 DashboardLayout 抽出）
 // Day5：新增「图表图库」入口；Day6：新增「地图联动」入口；Day8：新增「AI 出图」入口
+// Day13：导航项 hover / focus 时预取目标路由 chunk，点进去时模块已在内存中
 const now = ref(new Date().toLocaleString('zh-CN'))
 let timer: number | undefined
+
+const NAV: { to: string; label: string; view: ViewName }[] = [
+  { to: '/', label: '数据大屏', view: 'dashboard' },
+  { to: '/gallery', label: '图表图库', view: 'chart-gallery' },
+  { to: '/map', label: '地图联动', view: 'map-view' },
+  { to: '/ai', label: 'AI 出图', view: 'ai-chat' }
+]
 
 onMounted(() => {
   timer = window.setInterval(() => {
@@ -20,10 +29,14 @@ onBeforeUnmount(() => {
 <template>
   <header class="header">
     <nav class="nav">
-      <router-link to="/">数据大屏</router-link>
-      <router-link to="/gallery">图表图库</router-link>
-      <router-link to="/map">地图联动</router-link>
-      <router-link to="/ai">AI 出图</router-link>
+      <router-link
+        v-for="item in NAV"
+        :key="item.to"
+        :to="item.to"
+        @mouseenter="prefetchView(item.view)"
+        @focus="prefetchView(item.view)"
+        >{{ item.label }}</router-link
+      >
     </nav>
     <h1>AI 数据可视化大屏</h1>
     <div class="datetime">{{ now }}</div>
@@ -63,6 +76,10 @@ h1 {
   font-size: 14px;
   color: #7eb8d8;
   text-decoration: none;
+  transition: color 0.2s;
+}
+.nav a:hover {
+  color: #b7e9ff;
 }
 .nav a.router-link-active {
   color: #00d4ff;
