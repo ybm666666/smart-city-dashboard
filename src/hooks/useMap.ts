@@ -5,13 +5,15 @@ import { echarts } from '@/hooks/useEcharts'
  * Day6：地图注册组合式函数
  *
  * 职责：
- * - 按需拉取 GeoJSON（阿里云 DataV.GeoAtlas，全国 / 省市县边界）
+ * - 按需拉取 GeoJSON（Day12-hotfix 起为**本地内置**静态资源，见 config/mapData.ts）
  * - 用 echarts.registerMap 注册到全局地图仓库
  * - 同一张地图（mapName）只注册一次，避免重复请求与重复注册
  * - sessionStorage 缓存，刷新页面前不再重复下载
  *
- * 说明：GeoJSON 属于体积较大的静态资源，采用「运行时异步加载 + 缓存」而非打包进
- * bundle，避免主包体积膨胀（呼应 Day4 的按需引入 / 分包思路）。
+ * 说明：GeoJSON 体积较大（重庆全域约 160 KB），仍采用「运行时异步加载 + 缓存」
+ * 而非 import 进 bundle，避免主包体积膨胀（呼应 Day4 的按需引入 / 分包思路）。
+ * 放在 public/ 下由浏览器按静态资源缓存，不占主包，也不会因第三方域名
+ * 限流 / 跨域（此前的 403）导致地图白屏。
  */
 
 const registered = new Map<string, boolean>()

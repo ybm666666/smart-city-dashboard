@@ -2,9 +2,23 @@
  * Day6：地图数据配置中心
  *
  * - CHONGQING_MAP：地图元信息（mapName + GeoJSON 地址）
- *   GeoJSON 来自阿里云 DataV.GeoAtlas，全国 / 省市县边界可直接按 adcode 取用：
- *   500000 为重庆市，`_full` 后缀表示包含下辖全部区县。
  * - districtStats：区县指标数据，供地图热力渲染与联动详情使用。
+ *
+ * Day12-hotfix：GeoJSON 改为**本地内置**，不再依赖阿里云 DataV 外链。
+ *
+ * 背景：原先直接请求 `https://geo.datav.aliyun.com/...`，本地开发可用，
+ * 但部署到 GitHub Pages 后该域名返回 403（外链被拒 / 跨域限制），
+ * 地图页直接白屏。因为这份 GeoJSON 是**静态且不变**的，
+ * 放在 public/ 下随站点一起发布最稳：
+ *   - 不受第三方限流、跨域、可访问性变化影响
+ *   - 同源请求，无 CORS 问题
+ *   - 走静态资源缓存，二次访问几乎零成本
+ *
+ * 路径用 `import.meta.env.BASE_URL` 拼接：GitHub Pages 部署在
+ * `/smart-city-dashboard/` 子路径下（见 vite.config.ts 的 base），
+ * 硬编码 `/geojson/...` 会 404。
+ * 数据来自 DataV.GeoAtlas 的 500000_full（重庆，含下辖全部区县），
+ * 已固化到 public/geojson/chongqing.json。
  */
 
 export interface DistrictStat {
@@ -21,7 +35,8 @@ export interface DistrictStat {
 
 export const CHONGQING_MAP = {
   name: 'chongqing',
-  url: 'https://geo.datav.aliyun.com/areas_v3/bound/500000_full.json'
+  // 本地静态资源：随构建产物一起发布，BASE_URL 兼容子路径部署
+  url: `${import.meta.env.BASE_URL}geojson/chongqing.json`
 } as const
 
 // 重庆主城都市区核心区县（名称与 GeoJSON 中的 feature.name 对齐，如「渝中区」）

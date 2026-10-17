@@ -40,7 +40,10 @@ function onChartClick(params: { name?: string }) {
     <div v-if="pending" class="map-state">地图数据加载中…</div>
     <div v-else-if="error" class="map-state error">
       <p>地图加载失败：{{ error }}</p>
-      <p class="hint">请检查网络，或替换 GeoJSON 地址（默认使用阿里云 DataV.GeoAtlas）</p>
+      <p class="hint">
+        地图数据为本地内置文件（<code>public/geojson/chongqing.json</code>），
+        若仍失败请检查该文件是否随构建产物一起发布
+      </p>
     </div>
     <BaseChart
       v-else-if="ready"
