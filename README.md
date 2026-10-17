@@ -72,7 +72,9 @@ src/
 - [x] AI 出图体验完善：多会话管理（新建 / 切换 / 重命名 / 清空 / 删除 + 本地持久化）、示例库分组、错误分类提示与重试 —— Day 10
 - [x] SSE 流式对话 + 中断生成 + 助手消息 Markdown 渲染 —— Day 11
 - [x] 性能优化：图表懒渲染（IntersectionObserver）+ dataset 增量更新 —— Day 7
-- [ ] 部署上线（GitHub Pages / Vercel）
+- [x] 构建拆包优化：echarts 与 zrender 二次分包，单包全部回到 600 kB 阈值内 —— Day 12
+- [x] 部署上线：GitHub Actions 自动构建并发布到 GitHub Pages —— Day 12
+- [x] 文档整理：清理 README 重复段落，补充部署与体积对比说明 —— Day 12
 
 ## 地图说明（Day 6）
 
@@ -131,10 +133,67 @@ src/
 - **Markdown 渲染**：`utils/markdown.ts` 零依赖实现标题 / 列表 / 引用 / 代码块 / 行内代码 / 加粗斜体 /
   链接等子集，**先 HTML 转义再渲染**，并对链接做协议白名单，从根上规避 XSS。
 
+## 构建拆包与部署上线（Day 12）
+
+### 1. 为什么还要拆包
+
+Day 4 起 `useEcharts.ts` 就已按需引入（`echarts/core` + 具体 charts/components/renderer），
+但 Day 12 实测发现 **echarts 单 chunk 仍有 640.91 kB（gzip 213.34 kB）**，超过 Vite 默认 600 kB 告警线。
+
+原因是 `manualChunks` 只按包名把 echarts 收进一个 chunk，而 echarts 依赖的渲染内核
+**zrender** 体积占比很大，两者被打在同一个包里。
+
+### 2. 做法：二次分包
+
+在 `vite.config.ts` 的 `manualChunks` 里把 zrender 单独拎出来：
+
+```ts
+manualChunks(id: string) {
+  if (!id.includes('node_modules')) return
+  if (id.includes('zrender')) return 'echarts-zrender'  // 渲染内核，变动少
+  if (id.includes('echarts')) return 'echarts'          // 图表逻辑
+  if (id.includes('vue') || id.includes('pinia')) return 'vue'
+  return 'vendor'
+}
+```
+
+拆开的好处不止是「过告警线」：
+
+- **缓存命中率更高**：zrender 属于底层依赖，很少随业务代码变动，长期缓存；
+  业务更新只会击穿 `echarts` 与页面 chunk
+- **并行加载**：两个包可同时下载，而非串行等一个 640 kB 大包
+- **定位问题更快**：体积异常时能一眼看出是内核还是图表层膨胀
+
+### 3. 优化前后对比（实测）
+
+| chunk | 优化前 | 优化后 |
+|---|---|---|
+| `echarts` | 640.91 kB（gzip 213.34 kB） | 462.47 kB（gzip 155.47 kB） |
+| `echarts-zrender` | —（合并在上面） | 180.24 kB（gzip 57.93 kB） |
+| 构建告警 | ⚠️ 超过 600 kB | ✅ 无告警 |
+
+### 4. 部署到 GitHub Pages
+
+新增 `.github/workflows/deploy.yml`，推送 `master` 自动构建并发布：
+
+- 触发：`push` 到 `master`，也支持手动 `workflow_dispatch`
+- 权限：`pages: write` + `id-token: write`（OIDC 部署所需的最小权限）
+- 并发：`group: pages` + `cancel-in-progress`，新推送会取消排队中的旧部署
+- 流程：`checkout` → `setup-node`（Node 20 + npm 缓存）→ `npm ci` → `npm run build`
+  → `configure-pages` → `upload-pages-artifact` → `deploy-pages`
+
+**base 路径**：GitHub Pages 的项目站点部署在 `https://<user>.github.io/<repo>/` 子路径下，
+若 `base` 仍为 `/`，JS/CSS 会 404。因此 `vite.config.ts` 中：
+
+```ts
+base: process.env.GITHUB_ACTIONS ? '/smart-city-dashboard/' : '/'
+```
+
+在 Actions 中自动切到仓库子路径，本地开发与 Vercel 等平台仍用根路径。
+
+**路由**：项目使用 hash 模式（`/#/ai` 这类地址），刷新不会打到服务器路径，
+因此 GitHub Pages 无需额外配置 404.html 回退。
+
 ## 规划与复盘
 
 详细开发计划见根目录 `两周开发任务计划.md`。
-# AI 数据可视化大屏 · Smart City Dashboard
-
-基于 Vue3 + TypeScript 的智慧城市数据大屏，前端工程化实践项目。支持大屏数据可视化、GeoJSON 地图热力与联动、AI 自然语言出图与流式对话（开发中）。
-
