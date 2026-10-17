@@ -1,35 +1,52 @@
 <script setup lang="ts">
 // Day8：AI 自然语言出图 —— LLM/Mock → 配置 JSON → 校验 → 渲染
-// Day9：多轮上下文（在此基础上修改）+ 结果微调（改标题 / 换类型 / 追加 / 删除）
-import { computed, ref } from 'vue'
+// Day9：多轮上下文 + 本地微调栏（改标题 / 换类型 / 增删数据）
+// Day10：多会话管理（新建 / 切换 / 重命名 / 清空 / 删除 + 本地持久化）+ 示例库分组 + 错误提示与重试
+import { computed, nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import ChartPanel from '@/components/ChartPanel.vue'
 import ConfigChart from '@/components/ConfigChart.vue'
 import PanelState from '@/components/PanelState.vue'
 import { useAiStore } from '@/stores/ai'
+import { DEFAULT_TITLE } from '@/utils/chatSession'
 import type { ChartType } from '@/types'
 
 const store = useAiStore()
-const { messages, loading, error, chartConfig, usedFallback, mockMode, examples } = storeToRefs(store)
+const {
+  sessions,
+  activeId,
+  messages,
+  loading,
+  error,
+  canRetry,
+  chartConfig,
+  usedFallback,
+  mockMode,
+  exampleGroups
+} = storeToRefs(store)
 
 const input = ref('')
 const showJson = ref(false)
-// Day9：微调工具类
 const titleDraft = ref('')
-const typeDraft = ref<ChartType>('line')
+
+// Day10：正在重命名的会话 id（null = 没在改名）
+const renamingId = ref<string | null>(null)
+const renameText = ref('')
+const bodyRef = ref<HTMLElement | null>(null)
+
 const TYPE_OPTIONS: { value: ChartType; label: string }[] = [
   { value: 'line', label: '折线图' },
   { value: 'bar', label: '柱状图' },
   { value: 'pie', label: '饼图' },
   { value: 'scatter', label: '散点图' },
-  { value: 'gauge', label: '仪表盘' },
   { value: 'radar', label: '雷达图' },
-  { value: 'funnel', label: '漏斗图' }
+  { value: 'funnel', label: '漏斗图' },
+  { value: 'gauge', label: '仪表盘' }
 ]
 
 function send() {
   const text = input.value
-  if (!text.trim()) return
+  if (!text.trim() || loading.value) return
   void store.send(text)
   input.value = ''
 }
@@ -38,14 +55,54 @@ function pickExample(text: string) {
   send()
 }
 
-// Day9：本地即时微调
+// ---------- Day10：会话操作 ----------
+function onNew() {
+  store.newSession()
+  input.value = ''
+}
+function onClear() {
+  store.clearMessages()
+  showJson.value = false
+}
+function onDelete(id: string) {
+  store.deleteSession(id)
+}
+function onRetry() {
+  void store.retry()
+}
+function startRename(id: string, title: string) {
+  renamingId.value = id
+  renameText.value = title === DEFAULT_TITLE ? '' : title
+  void nextTick(() => {
+    const el = document.querySelector<HTMLInputElement>('.rename-input')
+    el?.focus()
+    el?.select()
+  })
+}
+function commitRename() {
+  if (!renamingId.value) return
+  store.renameSession(renamingId.value, renameText.value)
+  renamingId.value = null
+  renameText.value = ''
+}
+function cancelRename() {
+  renamingId.value = null
+  renameText.value = ''
+}
+function titleOf(title: string) {
+  return title || DEFAULT_TITLE
+}
+
+// ---------- Day9：本地微调 ----------
 function applyTitle() {
-  if (!titleDraft.value.trim()) return
-  store.refine({ kind: 'setTitle', title: titleDraft.value })
+  const t = titleDraft.value.trim()
+  if (!t) return
+  store.refine({ kind: 'setTitle', title: t })
   titleDraft.value = ''
 }
-function applyType() {
-  store.changeType(typeDraft.value)
+function onTypeChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value as ChartType
+  store.changeType(v)
 }
 function appendPoint() {
   store.refine({ kind: 'appendPoint' })
@@ -54,6 +111,17 @@ function removeLast() {
   store.refine({ kind: 'removeLast' })
 }
 
+// 消息变化时滚动到底部，保证最新一轮可见
+watch(
+  () => [messages.value.length, loading.value],
+  () => {
+    void nextTick(() => {
+      const el = bodyRef.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  }
+)
+
 const configJson = computed(() =>
   chartConfig.value ? JSON.stringify(chartConfig.value, null, 2) : ''
 )
@@ -61,22 +129,69 @@ const configJson = computed(() =>
 
 <template>
   <section class="ai">
-    <!-- 左：对话区 -->
+    <!-- Day10：最左 - 会话列表 -->
+    <aside class="session-col">
+      <button class="new-btn" @click="onNew">＋ 新建对话</button>
+
+      <ul class="session-list">
+        <li
+          v-for="s in sessions"
+          :key="s.id"
+          :class="['session-item', { active: s.id === activeId }]"
+          @click="store.switchSession(s.id)"
+        >
+          <input
+            v-if="renamingId === s.id"
+            v-model="renameText"
+            class="rename-input"
+            placeholder="输入会话名称"
+            @click.stop
+            @keyup.enter="commitRename"
+            @keyup.esc="cancelRename"
+            @blur="commitRename"
+          />
+          <template v-else>
+            <span class="session-title" :title="titleOf(s.title)">{{ titleOf(s.title) }}</span>
+            <span class="session-actions">
+              <button class="icon-btn" title="重命名" @click.stop="startRename(s.id, s.title)">
+                ✎
+              </button>
+              <button class="icon-btn" title="删除" @click.stop="onDelete(s.id)">✕</button>
+            </span>
+          </template>
+        </li>
+      </ul>
+
+      <p class="session-count">共 {{ sessions.length }} 个对话 · 本地保存</p>
+    </aside>
+
+    <!-- 中：对话区 -->
     <div class="chat-col">
-      <ChartPanel title="AI 自然语言出图（多轮对话 + 结果微调）">
-        <div class="chat-body">
+      <ChartPanel title="AI 自然语言出图（LLM → 配置 JSON → 校验 → 渲染）">
+        <div class="chat-toolbar">
+          <span class="cur-title">{{ titleOf(store.activeSession?.title ?? DEFAULT_TITLE) }}</span>
+          <button class="ghost" :disabled="!messages.length" @click="onClear">清空对话</button>
+        </div>
+
+        <div ref="bodyRef" class="chat-body">
           <p v-if="mockMode" class="tip">
-            演示模式：未检测到有效 API Key，正在使用内置 Mock（在 <code>.env.local</code> 配置后可接入真实大模型）。
+            演示模式：未检测到有效 API Key，正在使用内置 Mock（在 <code>.env.local</code>
+            配置后可接入真实大模型）。
           </p>
 
+          <!-- Day10：示例库分组 -->
           <div v-if="!messages.length" class="examples">
-            <span class="label">试试：</span>
-            <button v-for="ex in examples" :key="ex" class="chip" @click="pickExample(ex)">
-              {{ ex }}
-            </button>
+            <div v-for="g in exampleGroups" :key="g.name" class="example-group">
+              <span class="label">{{ g.name }}</span>
+              <button v-for="ex in g.items" :key="ex" class="chip" @click="pickExample(ex)">
+                {{ ex }}
+              </button>
+            </div>
           </div>
 
-          <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">{{ m.content }}</div>
+          <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
+            {{ m.content }}
+          </div>
           <div v-if="loading" class="msg assistant typing">AI 正在生成图表…</div>
         </div>
       </ChartPanel>
@@ -84,10 +199,10 @@ const configJson = computed(() =>
       <div class="input-bar">
         <input
           v-model="input"
-          placeholder="描述图表，或在此基础上修改，例如：把标题改成城市概览、换成柱状图"
+          placeholder="用一句话描述你想看的图表，例如：用饼图展示产业结构占比"
           @keyup.enter="send"
         />
-        <button :disabled="loading" @click="send">生成 / 修改</button>
+        <button :disabled="loading" @click="send">生成图表</button>
       </div>
     </div>
 
@@ -96,7 +211,10 @@ const configJson = computed(() =>
       <ChartPanel title="图表预览">
         <PanelState v-if="loading" loading />
         <template v-else-if="chartConfig">
-          <div v-if="usedFallback" class="warn">出图失败，已降级展示默认图表</div>
+          <div v-if="usedFallback" class="warn">
+            <span>出图失败，已降级展示默认图表</span>
+            <button v-if="canRetry" class="retry-btn" @click="onRetry">重试</button>
+          </div>
           <div class="preview-body">
             <ConfigChart :config="chartConfig" />
           </div>
@@ -104,18 +222,29 @@ const configJson = computed(() =>
         <PanelState v-else empty empty-text="说出你的需求，AI 会在这里渲染图表" />
       </ChartPanel>
 
-      <!-- Day9：结果微调工具条 -->
+      <!-- Day9：微调栏 -->
       <div v-if="chartConfig" class="refine-bar">
         <span class="refine-label">微调：</span>
-        <input v-model="titleDraft" class="title-input" placeholder="新标题" @keyup.enter="applyTitle" />
+        <input
+          v-model="titleDraft"
+          class="title-input"
+          placeholder="修改图表标题"
+          @keyup.enter="applyTitle"
+        />
         <button class="mini" @click="applyTitle">改标题</button>
-        <select v-model="typeDraft" class="type-select">
+        <select class="type-select" :value="chartConfig.type" @change="onTypeChange">
           <option v-for="t in TYPE_OPTIONS" :key="t.value" :value="t.value">{{ t.label }}</option>
         </select>
-        <button class="mini" @click="applyType">换类型</button>
-        <button class="mini" @click="appendPoint">+ 数据点</button>
-        <button class="mini" @click="removeLast">− 数据点</button>
+        <button class="mini" @click="appendPoint">＋ 加数据</button>
+        <button class="mini" @click="removeLast">－ 删末项</button>
       </div>
+
+      <!-- Day10：错误提示 + 重试 -->
+      <div v-if="error && canRetry" class="error-box">
+        <span class="error-text">最近一次错误：{{ error }}</span>
+        <button class="retry-btn" @click="onRetry">重试</button>
+      </div>
+      <p v-else-if="error" class="err">最近一次错误：{{ error }}</p>
 
       <div v-if="chartConfig" class="json-box">
         <button class="json-toggle" @click="showJson = !showJson">
@@ -123,7 +252,6 @@ const configJson = computed(() =>
         </button>
         <pre v-if="showJson" class="json">{{ configJson }}</pre>
       </div>
-      <p v-if="error" class="err">最近一次错误：{{ error }}</p>
     </div>
   </section>
 </template>
@@ -132,9 +260,113 @@ const configJson = computed(() =>
 .ai {
   flex: 1;
   display: flex;
-  gap: 20px;
+  gap: 16px;
   min-height: 0;
 }
+/* Day10：会话列表栏 */
+.session-col {
+  width: 196px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(0, 50, 100, 0.2);
+  border: 1px solid rgba(0, 150, 255, 0.3);
+  border-radius: 8px;
+  min-height: 0;
+}
+.new-btn {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #0a1929;
+  background: #00d4ff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.new-btn:hover {
+  opacity: 0.88;
+}
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #7eb8d8;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.session-item:hover {
+  background: rgba(0, 150, 255, 0.12);
+  color: #b8e4ff;
+}
+.session-item.active {
+  background: rgba(0, 212, 255, 0.16);
+  border-color: rgba(0, 212, 255, 0.5);
+  color: #00d4ff;
+}
+.session-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-actions {
+  display: none;
+  gap: 2px;
+}
+.session-item:hover .session-actions,
+.session-item.active .session-actions {
+  display: flex;
+}
+.icon-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  font-size: 12px;
+  color: #7eb8d8;
+  background: transparent;
+  border: 1px solid rgba(0, 150, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: #00d4ff;
+  border-color: #00d4ff;
+}
+.rename-input {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 13px;
+  color: #e0e6ed;
+  background: rgba(0, 20, 40, 0.8);
+  border: 1px solid #00d4ff;
+  border-radius: 4px;
+  outline: none;
+}
+.session-count {
+  font-size: 11px;
+  color: #5f8bab;
+  text-align: center;
+}
+/* 对话 / 预览 */
 .chat-col,
 .preview-col {
   flex: 1;
@@ -142,6 +374,40 @@ const configJson = computed(() =>
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(0, 150, 255, 0.25);
+}
+.cur-title {
+  font-size: 13px;
+  color: #9fe6ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ghost {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #7eb8d8;
+  background: transparent;
+  border: 1px solid rgba(0, 150, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ghost:hover:not(:disabled) {
+  color: #00d4ff;
+  border-color: #00d4ff;
+}
+.ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .chat-body {
   flex: 1;
@@ -159,14 +425,20 @@ const configJson = computed(() =>
 }
 .examples {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.example-group {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
 }
 .examples .label {
-  font-size: 13px;
-  color: #7eb8d8;
+  font-size: 12px;
+  color: #5f8bab;
+  min-width: 28px;
 }
 .chip {
   padding: 4px 10px;
@@ -236,10 +508,14 @@ const configJson = computed(() =>
   min-height: 0;
 }
 .warn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 12px;
   color: #ff9500;
   margin-bottom: 6px;
 }
+/* Day9：微调栏 */
 .refine-bar {
   display: flex;
   flex-wrap: wrap;
@@ -287,237 +563,37 @@ const configJson = computed(() =>
 .mini:hover {
   border-color: #00d4ff;
 }
-.json-box {
+/* Day10：错误提示 / 重试 */
+.error-box {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.json-toggle {
-  align-self: flex-start;
-  padding: 4px 12px;
-  font-size: 12px;
-  color: #7eb8d8;
-  background: transparent;
-  border: 1px solid rgba(0, 150, 255, 0.3);
-  border-radius: 4px;
-  cursor: pointer;
-}
-.json {
-  max-height: 200px;
-  overflow: auto;
-  padding: 10px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #9fe6ff;
-  background: rgba(0, 20, 40, 0.6);
-  border: 1px solid rgba(0, 150, 255, 0.2);
-  border-radius: 6px;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.err {
-  font-size: 12px;
-  color: #ff8a8a;
-}
-</style>
-<script setup lang="ts">
-// Day8：AI 自然语言出图 —— LLM/Mock → 配置 JSON → 校验 → 渲染
-import { computed, ref } from 'vue'
-import { storeToRefs } from 'pinia'
-import ChartPanel from '@/components/ChartPanel.vue'
-import ConfigChart from '@/components/ConfigChart.vue'
-import PanelState from '@/components/PanelState.vue'
-import { useAiStore } from '@/stores/ai'
-
-const store = useAiStore()
-const { messages, loading, error, chartConfig, usedFallback, mockMode, examples } = storeToRefs(store)
-
-const input = ref('')
-const showJson = ref(false)
-
-function send() {
-  const text = input.value
-  if (!text.trim()) return
-  void store.send(text)
-  input.value = ''
-}
-function pickExample(text: string) {
-  input.value = text
-  send()
-}
-
-const configJson = computed(() =>
-  chartConfig.value ? JSON.stringify(chartConfig.value, null, 2) : ''
-)
-</script>
-
-<template>
-  <section class="ai">
-    <!-- 左：对话区 -->
-    <div class="chat-col">
-      <ChartPanel title="AI 自然语言出图（LLM → 配置 JSON → 校验 → 渲染）">
-        <div class="chat-body">
-          <p v-if="mockMode" class="tip">
-            演示模式：未检测到有效 API Key，正在使用内置 Mock（在 <code>.env.local</code> 配置后可接入真实大模型）。
-          </p>
-
-          <div v-if="!messages.length" class="examples">
-            <span class="label">试试：</span>
-            <button v-for="ex in examples" :key="ex" class="chip" @click="pickExample(ex)">
-              {{ ex }}
-            </button>
-          </div>
-
-          <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">{{ m.content }}</div>
-          <div v-if="loading" class="msg assistant typing">AI 正在生成图表…</div>
-        </div>
-      </ChartPanel>
-
-      <div class="input-bar">
-        <input
-          v-model="input"
-          placeholder="用一句话描述你想看的图表，例如：用饼图展示产业结构占比"
-          @keyup.enter="send"
-        />
-        <button :disabled="loading" @click="send">生成图表</button>
-      </div>
-    </div>
-
-    <!-- 右：预览区 -->
-    <div class="preview-col">
-      <ChartPanel title="图表预览">
-        <PanelState v-if="loading" loading />
-        <template v-else-if="chartConfig">
-          <div v-if="usedFallback" class="warn">出图失败，已降级展示默认图表</div>
-          <div class="preview-body">
-            <ConfigChart :config="chartConfig" />
-          </div>
-        </template>
-        <PanelState v-else empty empty-text="说出你的需求，AI 会在这里渲染图表" />
-      </ChartPanel>
-
-      <div v-if="chartConfig" class="json-box">
-        <button class="json-toggle" @click="showJson = !showJson">
-          {{ showJson ? '收起' : '查看' }}配置 JSON
-        </button>
-        <pre v-if="showJson" class="json">{{ configJson }}</pre>
-      </div>
-      <p v-if="error" class="err">最近一次错误：{{ error }}</p>
-    </div>
-  </section>
-</template>
-
-<style scoped>
-.ai {
-  flex: 1;
-  display: flex;
-  gap: 20px;
-  min-height: 0;
-}
-.chat-col,
-.preview-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-.chat-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.tip {
-  font-size: 12px;
-  color: #7eb8d8;
-  margin-bottom: 10px;
-  line-height: 1.5;
-}
-.tip code {
-  color: #00d4ff;
-}
-.examples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
-}
-.examples .label {
-  font-size: 13px;
-  color: #7eb8d8;
-}
-.chip {
-  padding: 4px 10px;
-  font-size: 12px;
-  color: #7eb8d8;
-  background: rgba(0, 150, 255, 0.1);
-  border: 1px solid rgba(0, 150, 255, 0.3);
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.chip:hover {
-  color: #00d4ff;
-  border-color: #00d4ff;
-}
-.msg {
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  border-radius: 8px;
-  max-width: 85%;
-  font-size: 14px;
-  line-height: 1.5;
-}
-.msg.user {
-  background: rgba(0, 212, 255, 0.15);
-  color: #e0e6ed;
-  margin-left: auto;
-}
-.msg.assistant {
-  background: rgba(0, 255, 136, 0.1);
-  color: #d6ffe9;
-}
-.typing {
-  color: #7eb8d8;
-}
-.input-bar {
-  display: flex;
+  justify-content: space-between;
   gap: 10px;
-}
-.input-bar input {
-  flex: 1;
-  padding: 10px;
-  background: rgba(0, 50, 100, 0.3);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #ff8a8a;
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 100, 100, 0.3);
   border-radius: 6px;
-  color: #e0e6ed;
-  outline: none;
 }
-.input-bar input:focus {
-  border-color: #00d4ff;
+.error-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.input-bar button {
-  padding: 10px 20px;
-  background: #00d4ff;
-  border: none;
-  border-radius: 6px;
-  color: #0a1929;
+.retry-btn {
+  flex: none;
+  padding: 2px 10px;
+  font-size: 12px;
   font-weight: 600;
+  color: #0a1929;
+  background: #ffb642;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
 }
-.input-bar button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.preview-body {
-  flex: 1;
-  min-height: 0;
-}
-.warn {
-  font-size: 12px;
-  color: #ff9500;
-  margin-bottom: 6px;
+.retry-btn:hover {
+  opacity: 0.85;
 }
 .json-box {
   display: flex;
@@ -550,5 +626,14 @@ const configJson = computed(() =>
 .err {
   font-size: 12px;
   color: #ff8a8a;
+}
+@media (max-width: 1100px) {
+  .ai {
+    flex-direction: column;
+  }
+  .session-col {
+    width: auto;
+    max-height: 170px;
+  }
 }
 </style>

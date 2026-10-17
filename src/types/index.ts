@@ -97,4 +97,26 @@ export interface RealtimePoint {
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
+  /** Day10：消息时间戳，用于会话排序与展示 */
+  createdAt?: number
+}
+
+// Day10：AI 出图会话（一个会话 = 一段独立对话 + 它产出的图表配置）
+export interface ChatSession {
+  id: string
+  /** 会话标题：默认由首条提问推导，可手动重命名 */
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: ChatMessage[]
+  /** 该会话当前渲染的图表配置 */
+  chartConfig: ChartConfig | null
+  /** 该会话是否展示的是降级兜底图表 */
+  usedFallback?: boolean
+}
+
+// Day10：示例库分组
+export interface ExampleGroup {
+  name: string
+  items: string[]
 }
