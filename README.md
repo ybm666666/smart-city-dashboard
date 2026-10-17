@@ -75,6 +75,9 @@ src/
 - [x] 构建拆包优化：echarts 与 zrender 二次分包，单包全部回到 600 kB 阈值内 —— Day 12
 - [x] 部署上线：GitHub Actions 自动构建并发布到 GitHub Pages —— Day 12
 - [x] 文档整理：清理 README 重复段落，补充部署与体积对比说明 —— Day 12
+- [x] 首屏性能：`index.html` 内联启动骨架（消除白屏）+ 路由级懒加载 + hover 预取 chunk —— Day 13
+- [x] 骨架屏占位：新增 `ChartSkeleton`（chart / panel / map / stat 四变体），接入图表与整屏加载态 —— Day 13
+- [x] 构建细节收口：`modulePreload` 只保留 js 依赖、小资源内联、关闭 sourcemap —— Day 13
 
 ## 地图说明（Day 6）
 
@@ -196,6 +199,114 @@ base: process.env.GITHUB_ACTIONS ? '/smart-city-dashboard/' : '/'
 
 **路由**：项目使用 hash 模式（`/#/ai` 这类地址），刷新不会打到服务器路径，
 因此 GitHub Pages 无需额外配置 404.html 回退。
+
+## 首屏性能优化（Day 13）
+
+Day12 把 `echarts` 单包从 640.91 kB 拆到 462.47 kB 后，构建告警已经消除，
+问题随即从「包太大」变成「**JS 到手之前用户看到什么**」。
+体积再小，弱网下从白屏到画出内容仍有数秒空窗，所以 Day13 分两条线推进：
+
+| 关注点 | 手段 |
+|---|---|
+| 内容何时**出现** | `index.html` 内联首屏启动骨架 |
+| 内容何时**就绪** / 切换多快 | 路由级懒加载 + hover 预取 chunk |
+| 等待期间**看到什么** | `ChartSkeleton` 骨架屏占位 |
+
+### 1. 首屏启动骨架（`index.html`）
+
+把一段极小的内联样式与 HTML 直接放进 `#app`：深色渐变底 + 标题 + 进度条 + 「正在加载可视化模块…」。
+
+- **为什么放在 `#app` 里**：`app.mount('#app')` 会清空容器内容，占位被整体替换，
+  不需要额外写「挂载后删除」的逻辑，也不会残留节点；
+- **为什么样式必须内联**：外链 CSS 本身要一次请求，等于把「白屏」换成「无样式白屏」；
+- **底色与 `DashboardLayout` 对齐**（`#0a1929 → #1a2332`），挂载瞬间不闪白；
+- 附带 `prefers-reduced-motion` 降级，动画可关。
+
+### 2. 路由级懒加载 + hover 预取
+
+`router/index.ts` 把四个视图的 loader 抽成 `viewLoaders` 对象，路由配置与预取函数
+**共用同一份引用**——避免两处各写一次 `import()` 导致路径漂移、chunk 重复打包。
+
+```ts
+const viewLoaders = {
+  dashboard: () => import('@/views/DashboardView.vue'),
+  'chart-gallery': () => import('@/views/ChartGalleryView.vue'),
+  'map-view': () => import('@/views/MapView.vue'),
+  'ai-chat': () => import('@/views/AiChatView.vue')
+}
+
+const prefetched = new Set<ViewName>()
+
+export function prefetchView(name: ViewName): void {
+  if (prefetched.has(name)) return          // 幂等：重复 hover 不重复请求
+  prefetched.add(name)
+  void viewLoaders[name]().catch(() => {
+    prefetched.delete(name)                 // 失败回滚，允许下次重试
+  })
+}
+```
+
+`AppHeader` 的导航项在 `mouseenter` / `focus` 时调用 `prefetchView(name)`，
+用户点下去时模块已在内存里。**用 hover 而不是 idle 全量预取**：
+hover 是「有明确意图」的信号，idle 预取会把所有路由 chunk 都拉一遍，对流量敏感场景是浪费。
+
+顺带补了 `scrollBehavior: () => ({ top: 0 })`，切路由不再停在上页滚动位置。
+
+### 3. 骨架屏占位（`ChartSkeleton.vue`）
+
+纯 CSS 微光动画，零依赖零请求，四个变体：`chart`（柱条）/ `panel`（标题条 + 柱条）/
+`map`（同心圆）/ `stat`（数值行）。柱高用 `28 + (i * 37) % 66` 生成伪随机感，
+动画延迟递增 90ms，避免一排等高的「假图表」。
+
+接入两处：
+
+- **`BaseChart` 懒渲染等待期**：Day7 的 `useInView` 让图表进入视口才初始化，
+  等待期间容器是空的，没有固定高度就会出现「先塌陷、后撑开」。
+  这里有个坑：骨架屏**不能**和 ECharts 容器做成同一父容器的前后节点——
+  `echarts.init` 会往容器追加 `canvas`，两者会互相挤压导致闪动。
+  最终改为**兄弟节点 + 绝对定位覆盖**（`inset: 0` + `pointer-events: none`），
+  `inView` 翻转时原地换成 canvas，视觉上只是内容淡入。
+- **`PanelState` 的 loading 态**：新增 `skeleton` 开关，打开后渲染 `variant="panel"`
+  骨架屏，与真实图表同构（都有标题条 + 主体区），数据回来只是「灰柱换彩图」。
+  `DashboardView` 的整屏加载态直接使用。
+
+> 没有全站替换 spinner：小面积、短耗时场景转圈更合适，骨架屏适合「有明确版式、等待较久」的区域。
+
+### 4. 构建侧收口
+
+```ts
+build: {
+  chunkSizeWarningLimit: 600,
+  assetsInlineLimit: 4096,     // 小资源内联，省请求
+  sourcemap: false,
+  modulePreload: {
+    polyfill: true,
+    resolveDependencies: (_f, deps) => deps.filter((d) => /\.js$/.test(d))
+  }
+}
+```
+
+`modulePreload.resolveDependencies` 只保留 `.js` 依赖，避免把 css 等也塞进
+`<link rel="modulepreload">` 白白膨胀首屏 head。
+
+### 实测（Day 13 构建）
+
+```
+✓ built in ~3.5s，无 chunk 体积告警
+
+dist/index.html                              2.48 kB │ gzip:   1.38 kB
+dist/assets/DashboardView-*.js               5.54 kB │ gzip:   2.51 kB
+dist/assets/ChartGalleryView-*.js            1.65 kB │ gzip:   1.10 kB
+dist/assets/MapView-*.js                     4.24 kB │ gzip:   2.30 kB
+dist/assets/AiChatView-*.js                 24.82 kB │ gzip:  11.37 kB
+dist/assets/vendor-*.js                     52.71 kB │ gzip:  20.13 kB
+dist/assets/vue-*.js                        98.03 kB │ gzip:  38.21 kB
+dist/assets/echarts-zrender-*.js           180.24 kB │ gzip:  59.29 kB
+dist/assets/echarts-*.js                   462.47 kB │ gzip: 154.61 kB
+```
+
+关键点：**echarts 不再出现在首屏预加载列表里**，四个路由各自成 chunk，
+首页只加载主包 + `DashboardView`。
 
 ## 规划与复盘
 
