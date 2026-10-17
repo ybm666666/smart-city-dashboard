@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Day3 组件化：视图只做「组装」，具体图表与数据都在各自组件 / 配置里
 // Day7：视图挂载时触发数据加载（Pinia + 请求层），并统一处理加载 / 错误 / 空态
+// Day13：整屏加载态改用骨架屏，弱网下先出布局骨架，避免长时间白屏
 import { onBeforeUnmount, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import LeftPanel from '@/components/LeftPanel.vue'
@@ -21,7 +22,8 @@ onBeforeUnmount(() => store.stopRealtime())
 
 <template>
   <!-- Day7：整屏数据三态 —— 加载中 / 加载失败（可重试）/ 空数据 -->
-  <PanelState v-if="loading" class="full" loading />
+  <!-- Day13：加载中显示骨架屏（skeleton） -->
+  <PanelState v-if="loading" class="full" loading skeleton />
   <PanelState v-else-if="error" class="full" :error="error" @retry="store.retry()" />
   <PanelState
     v-else-if="empty"
