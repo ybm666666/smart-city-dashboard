@@ -308,6 +308,119 @@ dist/assets/echarts-*.js                   462.47 kB │ gzip: 154.61 kB
 关键点：**echarts 不再出现在首屏预加载列表里**，四个路由各自成 chunk，
 首页只加载主包 + `DashboardView`。
 
+## 打包优化与部署收尾（Day 14）
+
+Day 14 做三件事：把分包判据从「是什么库」换成「变得多快」、补上体积回归脚本、补齐 Vercel 部署配置并写复盘。
+
+### 1. 分包判据：体积 × 变更频率
+
+Day 12 的 `manualChunks` 是按库的身份分的（`echarts` / `vue` / 其余）。问题在于：
+`vue-router`、`pinia` 的升级节奏和 `vue` 本体并不一致，合在一个 chunk 里会让任一方升级
+都刷新整块 hash，缓存全部失效。
+
+Day 14 改成按**体积 × 变更频率**分档：
+
+```ts
+manualChunks(id: string) {
+  if (!id.includes('node_modules')) return
+  if (id.includes('zrender')) return 'echarts-zrender'        // 体积大 + 几乎不变
+  if (id.includes('echarts')) return 'echarts'
+  // ⚠ vue-router / pinia 的 id 里也含 "vue"，必须排在 vue 判断之前
+  if (id.includes('vue-router') || id.includes('pinia')) return 'vue-libs'
+  if (id.includes('@vue/') || id.includes('/vue/')) return 'vue'
+  if (id.includes('axios')) return 'http'                     // 请求基础设施，不随业务改
+  return 'vendor'
+}
+```
+
+判断顺序是这里唯一的坑：`vue-router`、`pinia` 的模块路径字符串里都含 `vue`，
+若 `vue` 的判断写在前，它们会被误吸进 `vue` 块，等于白拆。
+
+同时把 `chunkSizeWarningLimit` 从 600 收紧到 **500**——分档之后已经不该有块摸到这条线，
+阈值收紧才能在下一次退化时立刻报警。
+
+### 2. 体积回归：`npm run analyze`
+
+新增 `scripts/analyze-dist.mjs`，零依赖（只用 `node:fs` / `node:zlib`）：
+
+```bash
+npm run build && npm run analyze
+```
+
+输出三段：
+
+1. 全部资源的**原始体积 + 真实 gzip 体积**，按体积降序；
+2. 解析 `index.html` 的 `src` / `modulepreload`，标出**首屏关键 JS** 并汇总；
+3. 单块 gzip 超过预算（默认 160 KB）时明确告警。
+
+没有用 `rollup-plugin-visualizer`：它给的是交互式 HTML，体积趋势要人去看图；
+收尾阶段更需要**能在 CI 里断言的数字**。二十几行 gzip 逻辑换一个可回归基线，比多装一个依赖划算。
+
+### 3. 实测：首屏 JS 降 33%
+
+同一台机器 `npm run build`，Day 13 与 Day 14 对比：
+
+| 指标 | Day 13 | Day 14 | 变化 |
+| --- | --- | --- | --- |
+| 首屏关键 JS（原始） | 150.74 kB | **101.45 kB** | −49.29 kB（−32.7%） |
+| 首屏关键 JS（gzip） | 58.34 kB | **40.62 kB** | −17.72 kB（−30.4%） |
+| 分包数 | 4 类 | 6 类 | 缓存粒度更细 |
+| chunk 体积告警 | 无 | 无（阈值收紧至 500 kB） | — |
+
+Day 14 分档结果：
+
+```
+dist/assets/echarts-*.js           462.47 kB │ gzip: 154.61 kB
+dist/assets/echarts-zrender-*.js   180.24 kB │ gzip:  59.29 kB
+dist/assets/vue-*.js                68.32 kB │ gzip:  27.03 kB   ★首屏
+dist/assets/http-*.js               51.44 kB │ gzip:  19.49 kB
+dist/assets/vue-libs-*.js           29.68 kB │ gzip:  11.82 kB   ★首屏
+dist/assets/vendor-*.js              1.28 kB │ gzip:   0.73 kB
+
+✓ built in 7.22s，无 chunk 体积告警
+```
+
+★ = 出现在 `index.html` 预加载列表里。首屏只剩 `index` + `vue` + `vue-libs` 三个 JS，
+`echarts` 与 `axios` 都随路由按需加载。
+
+变化来自两处：`vue-libs` 独立后首屏不再为 router/pinia 付整块代价；
+`http`（axios）独立后首屏完全不加载它。
+
+### 4. 双平台部署
+
+**GitHub Pages（主）** —— `.github/workflows/deploy.yml`，推 `master` 即构建部署。三个易漏点：
+
+- `base` 必须带仓库名（`/smart-city-dashboard/`），否则子路径下 JS/CSS 全部 404；用 `process.env.GITHUB_ACTIONS` 区分 CI 与本地。
+- 权限需显式声明 `pages: write` + `id-token: write`，缺一个就在 deploy 步骤失败。
+- `concurrency.group: pages` 保证同一时间只跑一个部署，新推送取消旧任务。
+
+**Vercel（备）** —— `vercel.json`：
+
+```json
+{
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "cleanUrls": true,
+  "headers": [
+    { "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+  ],
+  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
+}
+```
+
+`/assets/*` 打 `immutable` 长缓存（文件名带 hash，天然可永久缓存）；
+其余路径 rewrite 到 `index.html`（当前用 hash 路由不依赖 history fallback，但保留这条对以后换模式更稳）。
+
+### 5. 复盘文档
+
+`docs/RETROSPECTIVE.md` 记录了从「功能能用」到「交付可用」的完整复盘：
+五个真正卡住过的问题（ECharts 全量引入、骨架屏挤压、modulepreload 塞 CSS、
+大屏缩放发虚、SSE 截断 Markdown）、Day 12–14 的三步性能收尾、以及「如果重来一次」的取舍。
+
 ## 规划与复盘
 
-开发按 Day 递进推进，各阶段的目标、实现与踩坑复盘见仓库根目录的 `dayN-*.txt` 开发日志。
+开发按 Day 递进推进。各阶段的目标、实现与踩坑复盘见仓库根目录的 `dayN-*.txt` 开发日志；
+两周迭代的整体复盘见 [`docs/RETROSPECTIVE.md`](docs/RETROSPECTIVE.md)。
