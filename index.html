@@ -4,9 +4,81 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI 数据可视化大屏</title>
+    <!--
+      Day13：首屏启动骨架 + 主题底色，直接内联在这里。
+      作用：JS 下载/执行完成前，浏览器就已经画出「深色底 + 标题 + 加载反馈」，
+      不再出现纯白屏；Vue 挂载到 #app 后这段静态占位被整体替换，不会残留。
+      注意：样式全部内联，不产生额外请求，避免首屏再等一次 CSS。
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #0a1929;
+      }
+      #boot-skeleton {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+        background: linear-gradient(135deg, #0a1929 0%, #1a2332 100%);
+      }
+      #boot-skeleton .boot-title {
+        font-size: clamp(20px, 2.2vw, 30px);
+        letter-spacing: 6px;
+        color: #00d4ff;
+        text-shadow: 0 0 12px rgba(0, 212, 255, 0.45);
+      }
+      #boot-skeleton .boot-bar {
+        width: min(320px, 60vw);
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(0, 150, 255, 0.18);
+        overflow: hidden;
+      }
+      #boot-skeleton .boot-bar::after {
+        content: '';
+        display: block;
+        width: 40%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+        animation: boot-slide 1.2s ease-in-out infinite;
+      }
+      #boot-skeleton .boot-tip {
+        font-size: 13px;
+        color: #7eb8d8;
+        letter-spacing: 2px;
+      }
+      @keyframes boot-slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(260%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-skeleton .boot-bar::after {
+          animation: none;
+          width: 100%;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!-- Day13：首屏静态骨架，Vue 挂载到 #app 后会被替换掉 -->
+      <div id="boot-skeleton">
+        <div class="boot-title">AI 数据可视化大屏</div>
+        <div class="boot-bar"></div>
+        <div class="boot-tip">正在加载可视化模块…</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
