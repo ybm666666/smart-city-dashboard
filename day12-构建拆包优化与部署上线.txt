@@ -181,3 +181,34 @@ feat(day12): 构建拆包优化(echarts/zrender 二次分包)
 ```
 
 （提交 `b77c86f`，远程 master 已同步）
+
+────────────────────────────────────────
+补充（Hotfix）：地图页 GeoJSON 403 修复 + 地图尺寸塌陷修复
+────────────────────────────────────────
+
+一、线上 403 问题
+现象：部署上线后访问 #/map，区县轮廓不渲染，控制台 GeoJSON 请求返回 HTTP 403。
+原因：原实现直接外链 geo.datav.aliyun.com 的在线 GeoJSON，该域名在 GitHub Pages
+      环境（带 Referer / 跨域策略）下拒绝外链请求，导致地图数据拿不到而白屏。
+方案：改为「本地内置 + 运行时异步加载」。
+      1) 下载重庆全域 GeoJSON（38 个区县，约 162 KB）到 public/geojson/chongqing.json；
+      2) config/mapData.ts 中地图地址改为 `${import.meta.env.BASE_URL}geojson/chongqing.json`，
+         自动跟随 vite 的 base 配置，本地开发与 Pages 子路径部署都能正确解析；
+      3) hooks/useMap.ts 保持原有逻辑：fetch → echarts.registerMap → sessionStorage 缓存，
+         同一 mapName 只注册一次，避免重复请求与重复注册。
+收益：不再依赖第三方域名，彻底规避跨域/限流导致的 403；GeoJSON 放 public/ 由浏览器
+      按静态资源缓存，不进入主包，主包体积不受影响。
+
+二、地图尺寸塌陷问题（本次随 hotfix 一并修复）
+现象：GeoJSON 加载成功、区县数据也注册成功，但地图被压成画布底部一条细带，
+      区县轮廓极小，交互几乎不可用。
+原因：MapChart 的 height 默认值使用 '100%'，而其外层是 flex 布局中高度由内容派生的
+      容器链，百分比高度无法解析出确定值，ECharts 初始化时读到的高度极小。
+方案：
+      1) MapChart 的 height 默认值改为确定的像素值 '360px'；
+      2) .map-chart 增加 min-height: 320px 兜底，避免任何布局变化下再次塌陷。
+验证：npm run build 通过（vue-tsc 无类型错误，708 modules，echarts 仍为 462.47 kB）；
+      线上 #/map 地图正常铺满，点击区县可联动右侧详情（GDP / 常住人口 / 综合指数 + 产业结构饼图）。
+
+提交：56a439d fix(day12): 地图 GeoJSON 改为本地内置，修复线上 403 白屏
+      <本次>  fix(day12): 修复地图容器高度塌陷，地图恢复正常尺寸

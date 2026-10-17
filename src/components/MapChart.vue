@@ -17,7 +17,10 @@ interface Props {
   config: ChartConfig
   height?: string
 }
-const props = withDefaults(defineProps<Props>(), { height: '100%' })
+// Day12-hotfix：height 默认改为像素值。
+// 原因：外层 flex 链路高度是 auto 派生，`height: 100%` 无法解析出确定高度，
+// ECharts 初始化时容器高度塌陷，地图被压成一条细带。像素高度可确定性生效。
+const props = withDefaults(defineProps<Props>(), { height: '360px' })
 
 const emit = defineEmits<{ (e: 'select', name: string): void }>()
 
@@ -57,6 +60,9 @@ function onChartClick(params: { name?: string }) {
 <style scoped>
 .map-chart {
   width: 100%;
+  /* Day12-hotfix：百分比高度在 flex 链上可能塌陷为极小值，
+     导致地图被压成一条细带；给一个最小高度兜底，保证绘图区域充足 */
+  min-height: 320px;
 }
 .map-state {
   height: 100%;
