@@ -78,8 +78,11 @@ src/
 
 ## 地图说明（Day 6）
 
-- 地图 GeoJSON 采用运行时异步加载（阿里云 DataV.GeoAtlas），并用 `sessionStorage` 缓存，
+- 地图 GeoJSON 以**本地静态资源**内置在 `public/geojson/chongqing.json`（重庆全域 38 个区县，约 162 KB），
+  运行时用 `import.meta.env.BASE_URL` 拼接路径异步加载，并用 `sessionStorage` 缓存；
   不打包进 bundle，避免主包体积膨胀（呼应 Day 4 的按需引入 / 分包思路）。
+  早期版本曾直接外链第三方 CDN，在部分托管环境下会因跨域 / Referer 策略返回 403 导致地图白屏，
+  改为本地内置后该问题不再复现。
 - `useMap` 负责「加载 → `echarts.registerMap` → 幂等复用」；`MapChart` 负责注册完成后再渲染，
   并对加载中 / 加载失败给出状态提示。
 - 点击地图区县会触发 `chart-click`，联动展示该区县的指标详情（GDP / 人口 / 综合指数 / 产业结构）。
@@ -196,4 +199,4 @@ base: process.env.GITHUB_ACTIONS ? '/smart-city-dashboard/' : '/'
 
 ## 规划与复盘
 
-详细开发计划见根目录 `两周开发任务计划.md`。
+开发按 Day 递进推进，各阶段的目标、实现与踩坑复盘见仓库根目录的 `dayN-*.txt` 开发日志。
