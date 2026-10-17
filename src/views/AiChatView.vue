@@ -2,6 +2,7 @@
 // Day8：AI 自然语言出图 —— LLM/Mock → 配置 JSON → 校验 → 渲染
 // Day9：多轮上下文 + 本地微调栏（改标题 / 换类型 / 增删数据）
 // Day10：多会话管理（新建 / 切换 / 重命名 / 清空 / 删除 + 本地持久化）+ 示例库分组 + 错误提示与重试
+// Day11：SSE 流式输出 + 中断生成 + 助手消息 Markdown 渲染
 import { computed, nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import ChartPanel from '@/components/ChartPanel.vue'
@@ -9,6 +10,7 @@ import ConfigChart from '@/components/ConfigChart.vue'
 import PanelState from '@/components/PanelState.vue'
 import { useAiStore } from '@/stores/ai'
 import { DEFAULT_TITLE } from '@/utils/chatSession'
+import { renderMarkdown } from '@/utils/markdown'
 import type { ChartType } from '@/types'
 
 const store = useAiStore()
@@ -17,6 +19,7 @@ const {
   activeId,
   messages,
   loading,
+  isStreaming,
   error,
   canRetry,
   chartConfig,
@@ -113,7 +116,7 @@ function removeLast() {
 
 // 消息变化时滚动到底部，保证最新一轮可见
 watch(
-  () => [messages.value.length, loading.value],
+  () => [messages.value.length, loading.value, messages.value.map((m) => m.content).join('')],
   () => {
     void nextTick(() => {
       const el = bodyRef.value
@@ -121,6 +124,16 @@ watch(
     })
   }
 )
+
+/** Day11：中断当前流式输出 */
+function onStop() {
+  store.stopStreaming()
+}
+
+/** Day11：助手消息按 Markdown 渲染，用户消息保持原样 */
+function renderMessage(role: string, content: string): string {
+  return role === 'assistant' ? renderMarkdown(content) : ''
+}
 
 const configJson = computed(() =>
   chartConfig.value ? JSON.stringify(chartConfig.value, null, 2) : ''
@@ -189,8 +202,16 @@ const configJson = computed(() =>
             </div>
           </div>
 
+          <!-- Day11：助手消息按 Markdown 渲染；流式中显示光标；中断后标注 -->
           <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
-            {{ m.content }}
+            <div
+              v-if="m.role === 'assistant'"
+              class="md"
+              v-html="renderMessage(m.role, m.content)"
+            ></div>
+            <template v-else>{{ m.content }}</template>
+            <span v-if="m.streaming" class="caret"></span>
+            <span v-if="m.interrupted" class="interrupted">（已中断）</span>
           </div>
           <div v-if="loading" class="msg assistant typing">AI 正在生成图表…</div>
         </div>
@@ -202,7 +223,8 @@ const configJson = computed(() =>
           placeholder="用一句话描述你想看的图表，例如：用饼图展示产业结构占比"
           @keyup.enter="send"
         />
-        <button :disabled="loading" @click="send">生成图表</button>
+        <button v-if="!isStreaming" :disabled="loading" @click="send">生成图表</button>
+        <button v-else class="stop-btn" @click="onStop">停止</button>
       </div>
     </div>
 
@@ -473,6 +495,103 @@ const configJson = computed(() =>
 }
 .typing {
   color: #7eb8d8;
+}
+/* Day11：流式光标 */
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: #00d4ff;
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+.interrupted {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #ffb642;
+  opacity: 0.9;
+}
+/* Day11：Markdown 渲染样式 */
+.md :deep(p) {
+  margin: 0 0 8px;
+}
+.md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.md :deep(h1),
+.md :deep(h2),
+.md :deep(h3),
+.md :deep(h4) {
+  margin: 10px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #9fe6ff;
+  line-height: 1.4;
+}
+.md :deep(h1) {
+  font-size: 17px;
+}
+.md :deep(h2) {
+  font-size: 16px;
+}
+.md :deep(ul),
+.md :deep(ol) {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.md :deep(li) {
+  margin: 2px 0;
+}
+.md :deep(code) {
+  padding: 1px 5px;
+  font-size: 12px;
+  color: #00d4ff;
+  background: rgba(0, 20, 40, 0.7);
+  border-radius: 3px;
+}
+.md :deep(pre) {
+  margin: 0 0 8px;
+  padding: 10px;
+  overflow-x: auto;
+  background: rgba(0, 20, 40, 0.7);
+  border: 1px solid rgba(0, 150, 255, 0.2);
+  border-radius: 6px;
+}
+.md :deep(pre code) {
+  padding: 0;
+  color: #9fe6ff;
+  background: transparent;
+}
+.md :deep(blockquote) {
+  margin: 0 0 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: #8fb6cf;
+  border-left: 3px solid rgba(0, 212, 255, 0.5);
+  background: rgba(0, 150, 255, 0.06);
+}
+.md :deep(a) {
+  color: #00d4ff;
+  text-decoration: underline;
+}
+.md :deep(strong) {
+  color: #eaffff;
+  font-weight: 600;
+}
+.md :deep(hr) {
+  margin: 10px 0;
+  border: none;
+  border-top: 1px dashed rgba(0, 150, 255, 0.3);
+}
+.stop-btn {
+  background: #ff5c5c !important;
+  color: #fff !important;
 }
 .input-bar {
   display: flex;

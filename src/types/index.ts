@@ -99,6 +99,10 @@ export interface ChatMessage {
   content: string
   /** Day10：消息时间戳，用于会话排序与展示 */
   createdAt?: number
+  /** Day11：该条消息是否仍在流式输出中（视图显示光标） */
+  streaming?: boolean
+  /** Day11：该条消息是否被用户主动中断 */
+  interrupted?: boolean
 }
 
 // Day10：AI 出图会话（一个会话 = 一段独立对话 + 它产出的图表配置）

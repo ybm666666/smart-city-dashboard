@@ -1,6 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChartConfig, useMockLlm } from '@/api/llm'
+import { streamAssistantReply } from '@/api/stream'
 import { fallbackChartConfig, validateChartConfig } from '@/utils/chartSchema'
 import { applyRefine, describeRefine, type RefineAction } from '@/utils/chartOps'
 import {
@@ -16,7 +17,7 @@ import {
   sortSessions,
   trimSessions
 } from '@/utils/chatSession'
-import type { ChartConfig, ChartType, ChatMessage, ExampleGroup } from '@/types'
+import type { ChartConfig, ChatSession, ChartType, ChatMessage, ExampleGroup } from '@/types'
 
 // Day9：多轮对话只保留最近 N 条，控制上下文长度与 token 消耗
 const HISTORY_LIMIT = 12
@@ -66,6 +67,9 @@ export const useAiStore = defineStore('ai', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const canRetry = ref(false)
+  // Day11：流式输出状态（是否正在吐字、当前中断控制器）
+  const isStreaming = ref(false)
+  let abortCtrl: AbortController | null = null
 
   const mockMode = computed(() => useMockLlm())
 
@@ -181,14 +185,9 @@ export const useAiStore = defineStore('ai', () => {
       const cfg = validateChartConfig(raw)
       if (!cfg) throw new Error('模型返回的图表配置不合法')
       session.chartConfig = cfg
-      Object.assign(
-        session,
-        appendMessage(session, {
-          role: 'assistant',
-          content: `已生成「${cfg.title || cfg.type}」图表，请在右侧预览。`
-        })
-      )
       sessions.value = sortSessions(sessions.value)
+      // Day11：图表就绪后，立即以流式方式输出文字说明
+      await streamExplain(session, content, cfg)
     } catch (e) {
       const { message, retryable } = describeError(e)
       error.value = message
@@ -207,6 +206,52 @@ export const useAiStore = defineStore('ai', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * Day11：把助手说明以流式方式写入会话
+   * 先插入一条 content 为空的 assistant 消息，再逐字填充；结束（或中断）后清除 streaming 标记。
+   * 中断不视为错误：保留已生成内容并打上 interrupted 标记，界面提示「已中断」。
+   */
+  async function streamExplain(session: ChatSession, prompt: string, chart: ChartConfig) {
+    session.messages = [
+      ...session.messages,
+      { role: 'assistant', content: '', createdAt: Date.now(), streaming: true }
+    ]
+    const target = session.messages[session.messages.length - 1]
+
+    isStreaming.value = true
+    abortCtrl = new AbortController()
+    try {
+      await streamAssistantReply(
+        prompt,
+        chart,
+        (delta) => {
+          target.content += delta
+          session.updatedAt = Date.now()
+        },
+        abortCtrl.signal
+      )
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        target.interrupted = true
+        if (!target.content) target.content = '_已中断生成_'
+      } else {
+        const { message } = describeError(e)
+        error.value = message
+        if (!target.content) target.content = `说明生成失败：${message}`
+      }
+    } finally {
+      target.streaming = false
+      isStreaming.value = false
+      abortCtrl = null
+      sessions.value = sortSessions(sessions.value)
+    }
+  }
+
+  /** Day11：中断当前流式输出 */
+  function stopStreaming() {
+    abortCtrl?.abort()
   }
 
   function send(text: string) {
@@ -261,6 +306,7 @@ export const useAiStore = defineStore('ai', () => {
     activeSession,
     messages,
     loading,
+    isStreaming,
     error,
     canRetry,
     chartConfig,
@@ -279,6 +325,7 @@ export const useAiStore = defineStore('ai', () => {
     // 出图
     send,
     retry,
+    stopStreaming,
     refine,
     changeType,
     reset

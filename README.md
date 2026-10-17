@@ -53,7 +53,8 @@ src/
 ├─ router/       # 路由（hash 模式）
 ├─ stores/       # Pinia：useDashboardStore（异步数据 + 三态 + 实时序列，Day7）
 ├─ types/        # 全局 TS 类型
-├─ utils/        # 工具：chartSchema（Schema 校验 + 降级兜底）、chartOps（结果微调，Day9）、chatSession（会话模型 + 本地持久化，Day10）
+├─ utils/        # 工具：chartSchema（Schema 校验 + 降级兜底，Day8）、chartOps（结果微调，Day9）、
+│               #      chatSession（会话模型 + 本地持久化，Day10）、markdown（零依赖安全渲染，Day11）
 └─ views/        # 页面：DashboardView / ChartGalleryView / MapView / AiChatView
 ```
 
@@ -69,7 +70,7 @@ src/
 - [x] AI 自然语言出图（LLM Function Calling → 配置 JSON → 校验 → 渲染；无 Key 走 Mock）—— Day 8
 - [x] AI 出图增强：多轮对话上下文 + 结果微调（改标题 / 换类型 / 增删数据）—— Day 9
 - [x] AI 出图体验完善：多会话管理（新建 / 切换 / 重命名 / 清空 / 删除 + 本地持久化）、示例库分组、错误分类提示与重试 —— Day 10
-- [ ] SSE 流式对话 + 中断 + Markdown —— Day 11–12
+- [x] SSE 流式对话 + 中断生成 + 助手消息 Markdown 渲染 —— Day 11
 - [x] 性能优化：图表懒渲染（IntersectionObserver）+ dataset 增量更新 —— Day 7
 - [ ] 部署上线（GitHub Pages / Vercel）
 
@@ -120,6 +121,15 @@ src/
 - **错误分类与重试**：`describeError()` 把 401 / 429 / 超时 / 网络 / 5xx / 配置非法翻译成可操作提示，
   并给出「是否可重试」；可重试错误提供按钮，重试复用最后一次提问且不重复追加用户消息。
 - **与 Day 9 微调共存**：切换会话时图表与微调状态一并切换，微调仍走本地 `chartOps` 即时生效。
+
+## 流式对话与 Markdown（Day 11）
+
+- **SSE 流式输出**：图表生成后，助手说明以流式方式逐字写入——请求层 `chatStream`（Fetch + ReadableStream）
+  走真实 SSE；无 Key 时由 `api/stream.ts` 按句块「打字机」模拟，两种模式共用同一套 `onDelta` 回调。
+- **中断生成**：`AbortController` 贯穿请求层与状态层，界面上「生成图表」按钮在流式期间切换为「停止」；
+  中断不视为错误，保留已生成内容并标注「已中断」，空内容时回退为「已中断生成」。
+- **Markdown 渲染**：`utils/markdown.ts` 零依赖实现标题 / 列表 / 引用 / 代码块 / 行内代码 / 加粗斜体 /
+  链接等子集，**先 HTML 转义再渲染**，并对链接做协议白名单，从根上规避 XSS。
 
 ## 规划与复盘
 
