@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "analyze": "node scripts/analyze-dist.mjs"
   },
   "dependencies": {
     "axios": "^1.7.7",
