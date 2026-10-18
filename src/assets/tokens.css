@@ -1,0 +1,102 @@
+/**
+ * 设计令牌层（Day15）
+ *
+ * 目标：把散落在各组件 <style> 里的硬编码值收敛成一层语义化变量。
+ * 好处有三点：
+ * 1. 换肤 / 改主色只动这一处，不用全项目搜替换；
+ * 2. 语义化命名（--color-text-secondary 而不是 #7eb8d8）让新代码不猜颜色；
+ * 3. Web 大屏 / exe 封装 / 小程序三端共用同一套色板口径，视觉不跑偏。
+ *
+ * 命名分两类：
+ * - 语义令牌（--color-surface-panel / --color-text-secondary ...）：表达「用在哪」，组件样式优先用这一类；
+ * - 色阶令牌（--color-accent-a50 之类）：表达「主色的某个透明度」，用于描边、渐变、光晕等需要微调强度的场合。
+ *
+ * 注意：ECharts 的 option 里（<script> 内）必须写真实色值，
+ * 不能用 CSS 变量 —— canvas 不参与 CSS 变量解析。
+ */
+
+:root {
+  /* ---------- 背景层 ---------- */
+  --color-bg-base: #0a1929; /* 页面底色 */
+  --color-bg-elevated: #1a2332; /* 抬升层（弹层 / 输入框） */
+  --color-surface-panel: rgba(0, 50, 100, 0.2); /* 面板填充 */
+  --color-surface-panel-strong: rgba(0, 50, 100, 0.3); /* 面板填充（重） */
+  --color-surface-overlay: rgba(0, 20, 40, 0.6); /* 浮层遮罩 */
+  --color-surface-overlay-strong: rgba(0, 20, 40, 0.7);
+  --color-surface-overlay-heavy: rgba(0, 20, 40, 0.8);
+
+  /* ---------- 文字层 ---------- */
+  --color-text-primary: #e0e6ed; /* 正文 */
+  --color-text-secondary: #7eb8d8; /* 次要说明 */
+  --color-text-muted: #5f8bab; /* 弱化 / 占位 */
+  --color-text-subtle: #5b7f9c; /* 更弱（坐标轴标签） */
+  --color-text-dim: #8fb6cf; /* 辅助说明 */
+  --color-text-on-accent: #0a1929; /* 主色块上的文字 */
+  --color-text-inverse: #fff;
+
+  /* ---------- 主色（科技青） ---------- */
+  --color-accent: #00d4ff; /* 主强调色 */
+  --color-accent-strong: #9fe6ff; /* hover / 高亮态 */
+  --color-accent-soft: #b7e9ff; /* 链接 hover */
+  --color-accent-pale: #b8e4ff;
+  --color-accent-ghost: #eaffff;
+
+  /* ---------- 主色色阶（透明度） ---------- */
+  --color-accent-a50: rgba(0, 212, 255, 0.5);
+  --color-accent-a25: rgba(0, 212, 255, 0.25);
+  --color-accent-a22: rgba(0, 212, 255, 0.22);
+  --color-accent-a16: rgba(0, 212, 255, 0.16);
+  --color-accent-a15: rgba(0, 212, 255, 0.15);
+
+  /* ---------- 辅色色阶（描边用的蓝） ---------- */
+  --color-blue-a30: rgba(0, 150, 255, 0.3);
+  --color-blue-a25: rgba(0, 150, 255, 0.25);
+  --color-blue-a20: rgba(0, 150, 255, 0.2);
+  --color-blue-a12: rgba(0, 150, 255, 0.12);
+  --color-blue-a10: rgba(0, 150, 255, 0.1);
+  --color-blue-a06: rgba(0, 150, 255, 0.06);
+
+  /* ---------- 语义色 ---------- */
+  --color-success: #00ff88;
+  --color-success-a50: rgba(0, 255, 136, 0.5);
+  --color-success-a10: rgba(0, 255, 136, 0.1);
+  --color-success-text: #d6ffe9;
+  --color-warning: #ffb642;
+  --color-warning-strong: #ff9500;
+  --color-danger: #ff8a8a;
+  --color-danger-strong: #ff5c5c;
+  --color-danger-bg: rgba(255, 80, 80, 0.08);
+  --color-danger-border: rgba(255, 100, 100, 0.3);
+
+  /* ---------- 描边 / 分割线（语义别名） ---------- */
+  --border-accent: var(--color-blue-a30); /* 面板常规描边 */
+  --border-subtle: var(--color-blue-a12);
+  --border-focus: var(--color-accent-a50);
+
+  /* ---------- 光晕 ---------- */
+  --shadow-glow: 0 0 10px var(--color-accent-a50);
+  --shadow-glow-sm: 0 0 8px var(--color-accent-a50);
+
+  /* ---------- 间距 ---------- */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 15px;
+  --space-6: 20px;
+  --space-7: 30px;
+
+  /* ---------- 字号 ---------- */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 28px;
+
+  /* ---------- 圆角 ---------- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  /* ---------- 动效 ---------- */
+  --motion-fast: 0.2s;
+}
