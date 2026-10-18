@@ -50,10 +50,17 @@ useEcharts(
 .chart-host {
   position: relative;
   width: 100%;
+  /* 兜底高度：流式布局（小屏 / 移动端）下父级高度由 min-height 派生，
+     属于「内容决定」的 auto 高度，此时 height: 100% 解析不出确定值，
+     容器会塌成 0 —— ECharts 在零尺寸容器上初始化，画布就是空白。
+     给一个最小高度，保证任何布局模式下容器都有可用尺寸。 */
+  min-height: 220px;
 }
 .base-chart {
-  width: 100%;
-  height: 100%;
+  /* 用绝对定位铺满父级，不依赖百分比高度解析：
+     父级高度无论是显式指定、还是由 min-height 派生，都能正确填满 */
+  position: absolute;
+  inset: 0;
 }
 .chart-skeleton {
   position: absolute;
