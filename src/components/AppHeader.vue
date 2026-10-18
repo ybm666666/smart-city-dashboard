@@ -48,13 +48,13 @@ onBeforeUnmount(() => {
   text-align: center;
   padding: 20px 0;
   position: relative;
-  border-bottom: 1px solid rgba(0, 150, 255, 0.3);
+  border-bottom: 1px solid var(--color-blue-a30);
 }
 h1 {
   font-size: 28px;
-  color: #00d4ff;
+  color: var(--color-accent);
   letter-spacing: 4px;
-  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+  text-shadow: 0 0 10px var(--color-accent-a50);
 }
 .datetime {
   position: absolute;
@@ -62,7 +62,7 @@ h1 {
   top: 50%;
   transform: translateY(-50%);
   font-size: 14px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
 }
 .nav {
   position: absolute;
@@ -74,15 +74,15 @@ h1 {
 }
 .nav a {
   font-size: 14px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   text-decoration: none;
   transition: color 0.2s;
 }
 .nav a:hover {
-  color: #b7e9ff;
+  color: var(--color-accent-soft);
 }
 .nav a.router-link-active {
-  color: #00d4ff;
-  text-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+  color: var(--color-accent);
+  text-shadow: 0 0 8px var(--color-accent-a50);
 }
 </style>
