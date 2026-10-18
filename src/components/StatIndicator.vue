@@ -44,19 +44,19 @@ onMounted(() => {
 .label {
   display: block;
   font-size: 12px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   margin-bottom: 5px;
 }
 .value {
   font-size: 28px;
   font-weight: bold;
-  color: #00ff88;
-  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+  color: var(--color-success);
+  text-shadow: 0 0 8px var(--color-success-a50);
   font-family: 'Courier New', monospace;
 }
 .unit {
   font-size: 14px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   margin-left: 4px;
 }
 </style>
