@@ -1,0 +1,275 @@
+================================================================
+Day 15+：补上测试与 Lint 这两条腿
+项目：smart-city-dashboard（AI 数据可视化大屏）
+================================================================
+
+【一、为什么先做这件事】
+
+上一份评审给的分数是 88，扣分集中在一处：
+
+  零单元测试（-8）：最该测的纯函数（校验、微调、会话）反而裸奔
+  无 lint / 格式化（-3）：靠自觉，多人接手必出风格混乱
+  细节收尾（-1）：key="i"、版本号恒为 0.1.0、sourcemap 永久关闭
+
+这三条里，后两条是"小修"，随时能清；第一条是"缺腿"，不清就会一直瘸着走。
+
+所以我选了先补前两条，也就是这次 day15+ 的全部内容：测试 + lint。
+
+细节收尾那三项这次刻意没动 —— 它们适合攒成一个小迭代一次清掉，
+混在基建改造里提交会让 commit 语义变脏。
+
+
+【二、先想清楚测什么，而不是先装工具】
+
+装 vitest 是五分钟的事，难的是决定测哪。
+
+这个项目的模块可以粗分三层：
+
+  纯函数层    utils/chartSchema、chartOps、chatSession
+  组合层      hooks/useEcharts、useInView、stores
+  渲染层      components/*.vue、views/*.vue
+
+渲染层的测试性价比最低：ECharts 要 canvas，断言"画出来了"本身就很脆，
+而且线上已经有人眼验证和四页回归。组合层其次。
+
+真正值得钉死的是纯函数层，但理由不是"纯函数好测"，而是：
+
+  这些函数出错时不会报错。
+
+举个例子。validateChartConfig 如果把一份非法配置放过去了，
+不会抛异常、不会打 console，CI 也不会红 ——
+它只会安静地渲染出一张空白图或者乱图。
+用户看到的是"AI 出图瞎了"，而我们无从定位。
+
+同理，chartOps 的 applyRefine 一旦字段映射写错，
+微调按钮点下去图表只是"变了但不对"，也没有任何信号。
+
+这才是测试的真正价值：把静默失效变成显式失败。
+
+所以这次只测 utils，测的是"出错时没人会发现的那些路径"。
+vitest.config.ts 里 environment 用 node 而不是 jsdom，
+也是同一个判断：这批测试不需要 DOM。
+
+
+【三、35 个用例，钉的是两条链】
+
+新增两个测试文件。
+
+tests/chartSchema.spec.ts —— 校验与降级链
+
+  extractJson：
+    - 从 ```json 代码块里捞
+    - 从"好的，配置如下：{...} 以上"这种夹叙夹议里捞
+    - 没有 JSON / JSON 非法 → null
+    - 非字符串原样返回
+
+  validateChartConfig（按类型逐个压）：
+    - line：xAxis 数字转字符串、series 字符串数字转 number、支持二维多系列
+    - line 非法：缺 xAxis、xAxis 为空、series 含非数字 → 一律 null
+    - pie：缺 name、value 为 NaN、空数组 → null
+    - gauge：缺 value → null；max 缺省补 100
+    - radar：缺 indicators → null；radarData 缺省补零
+    - map：允许只有 type；mapData 非法时降级为不设置
+    - 未知类型 sunburst、非对象、空对象 → null
+    - 直接喂模型原文（带代码块）也能走完整链路
+
+  fallbackChartConfig：
+    - 返回的兜底配置自身必须合法（validateChartConfig(它) 原样返回）
+    - 每次返回新对象，不共享引用
+
+ 最后那条值得单独说。"兜底配置本身非法"是一种很隐蔽的 bug：
+  模型出错 → 走 fallback → fallback 又被下游判非法 → 白屏。
+  两层防御互相抵消，比单层失效更难查。所以专门加了一条断言把二者的契约绑住。
+
+tests/chartOps.spec.ts —— 微调链
+
+  setTitle / changeType / appendPoint / removeLast / applyRefine / describeRefine
+
+  重点覆盖：
+    - 类型转换的字段映射：line→pie 复用类目与数值、line→gauge 取末值、
+      line→radar 生成维度、转到 map 原样返回
+    - 空配置换类型时用 A/B/C 占位，避免渲染空图
+    - 随机数值落在 20~100 且为整数（不校验具体值，只校验边界）
+    - 删点后类目与数值保持等长
+    - 每个写操作都验证"不改动入参"
+    - applyRefine 的分发是否覆盖全部 kind
+
+  最后那条"不改动入参"是我个人坚持要写的。
+  纯函数是这批代码的核心约定，但约定如果没有测试守住，
+  下次谁写个 in-place 修改也不会有任何提示 —— 而由此引出的
+  Vue 响应式不触发、列表不刷新的问题，排查成本极高。
+
+  35 个用例全部通过，其中没有一条是"为了凑数"的 happy path。
+
+
+【四、lint：故意不装 recommended】
+
+ESLint 用的是扁平配置（eslint.config.js），几个决定值得写下来：
+
+  1. 只上 essential，不上 recommended
+     vue/recommended 会带一堆风格类规则（属性换行、标签顺序），
+     和 Prettier 打架。lint 管正确性，Prettier 管排版，各管一件事。
+
+  2. prettier 配置放最后
+     最后一项 eslint-config-prettier 关掉所有与 Prettier 冲突的规则，
+     这是官方推荐的接法，顺序不能反。
+
+  3. no-undef 关掉
+     TS 项目里 this 规则只会误报（类型检查交给 vue-tsc）。
+
+  4. no-explicit-any 关掉，但只关这一条
+     模型的返回值、localStorage 反序列化这些边界确实需要 any，
+     强行标注 any 之外的类型反而更假。收敛在少量入口，不做全局禁令。
+
+装完直接跑，报了 4 处 —— 全是既有代码，不是新写的。这说明规则确实在起作用：
+
+  env.d.ts       declare module '*.vue' 用了 DefineComponent<{}, {}, any>
+                 → 改成不带宽泛参数的 DefineComponent，补注释说明只做"可 import"声明
+
+  markdown.ts    /[#*_>`~\-]/ 里的 \- 在字符类中是多余转义
+                 → 去掉反斜杠
+
+  markdown.ts    行内代码占位符用了 \u0000 控制字符，触发 no-control-regex
+                 → 这一处不改实现，加 eslint-disable-next-line 并写明理由
+                   （哨兵必须用控制字符才能保证不与正文冲突）
+
+这三处我都没有选择"放宽规则"来解决。
+放宽规则是最省事的做法，但那样等于把 lint 变成摆设 ——
+今天为这三处放宽，明天就会为另外三处放宽。
+
+
+【五、锁文件与 CI：这里有个会炸的坑】
+
+这是本次最容易翻车、也最需要写下来的部分。
+
+现有部署流水线用的是 npm ci。npm ci 的行为特点：
+
+  它不读 package.json 的版本范围，只严格按 package-lock.json 安装；
+  一旦发现两个文件不同步，直接报错退出。
+
+也就是说，如果我只往 package.json 加 vitest 而不更新 lockfile：
+
+  推送 → CI 执行 npm ci → 报 lockfile 不同步 → 失败 → 站点不再更新
+
+线上站点会静默停在旧版本，而我可能以为"部署成功了"。
+
+为此我做了三件事：
+
+  1. 不在网页上手动改依赖，而是在沙箱里真实 npm install
+     生成与新 package.json 完全对应的 lockfile，再提交。
+
+  2. 安排提交顺序：先 lockfile，再 package.json。
+     中间那个状态是"旧 package.json + 新 lockfile"，
+     我实测过 npm ci 在这个组合下能正常装（多出来的包不会被安装），
+     所以流水线不会断。反过来先改 package.json 就会炸。
+
+  3. 推送前把 lockfile 里的 resolved 地址全部归一化到官方源。
+     npm install 默认走了镜像，生成的地址是 registry.npmmirror.com。
+     GitHub Actions 在境外，访问国内镜像既慢又可能失败。
+     归一化后我在沙箱里用官方源实跑了一次 npm ci，装了 236 个包全通过，
+     确认 integrity 哈希是匹配的（不匹配会直接报 EINTEGRITY）。
+
+  这三步都是"推送前必须做完"的活。等 CI 红了再回来查，代价高得多。
+
+CI 本身也改了，从原来的 build → deploy 两段变成三段：
+
+  verify（npm ci → lint → test）
+    ↓
+  build（npm ci → build → upload artifact）
+    ↓
+  deploy（部署 Pages）
+
+verify 挂在 build 之前，意思是：lint 或测试不过，就不构建、不部署。
+
+这条是有代价的 —— 以后任何一次提交只要 lint 报错，线上就停更。
+但这是故意的。之前那两个"静默失效"的风险，靠人工点页面兜不住，
+只能让流水线替我们兜。
+
+唯一的补救是 lint 规则要克制（见上一节）。
+规则太严 + 强制拦截，最后一定会有人用 --no-verify 绕过，那就彻底失效了。
+
+
+【六、踩到的坑】
+
+坑一：网页编辑器粘贴会把内容插两遍
+
+改 markdown.ts 时，我先全选，再粘贴。
+但那次粘贴回退到了纯文本通道，没有遵循已有选区，结果整份文件被插了两遍：
+177 行变成 352 行。
+
+更糟的是，我当时只看了屏幕右下角的行号（显示 176），
+误以为正常，就提交了。CI 立刻红了 —— 构建只跑了 18 秒。
+
+修法是重开编辑页，严格走三步：
+  点击编辑器 → 全选 → 按 Delete 清空（确认编辑器真的空了）→ 单次粘贴
+
+清空这一步不能省。全选后直接粘贴，取决于粘贴走哪条通道；
+先清空再粘贴，无论走哪条通道结果都只有一份。
+
+教训：
+
+  提交前要对"行数/字节数"做一次硬校验，而不是信任屏幕上看到的末尾行号。
+  后面几个文件我都在提交前对了行数，就再没出过这个问题。
+
+坑二：沙箱跑 npm 的缓存目录不可写
+
+第一次 npm install 直接失败。改用沙箱内自定义 cache 目录后就正常了。
+这类环境问题不用深究，换个目录绕过就行，
+但要知道"第一次失败不一定是依赖本身有问题"。
+
+
+【七、现在的状态】
+
+新增文件：
+
+  vitest.config.ts          只跑 tests/**/*.spec.ts，node 环境
+  eslint.config.js          扁平配置，essential + Prettier
+  .prettierrc.json          无分号、单引号、100 列
+  .prettierignore
+  tests/chartSchema.spec.ts
+  tests/chartOps.spec.ts
+
+修改：
+
+  package.json              新增 test / test:watch / lint / lint:fix / format / format:check
+  package-lock.json         同步生成，resolved 归一化到官方源
+  .github/workflows/deploy.yml   verify → build → deploy
+  env.d.ts                  收敛 .vue 模块声明类型
+  src/utils/markdown.ts     去掉多余转义 + 补控制字符豁免说明
+
+验证：
+
+  npm run lint     0 error, 0 warning
+  npm run test     35 passed
+  vue-tsc          无报错
+  npm ci           官方源实装 236 包通过
+  线上四页         正常，流水线 Run 50 成功（首次走 verify 三段）
+
+剩下没做的（评审里的 🟡 三项）：
+
+  AiChatView 的 key="i"   → 改消息 id 或内容指纹
+  sourcemap: false        → 改环境变量控制
+  version 0.1.0           → 开始走语义化版本 + CHANGELOG
+
+另外 chatSession 虽然有校验逻辑，这次也没写测试。
+它是第二批 —— 反序列化校验、会话裁剪、标题归一化都值得测，
+但优先级低于"校验"和"微调"这两条会静默失效的链。
+
+
+【八、这半天的真正收获】
+
+不是"项目有测试了"，而是想清楚了一件事：
+
+  测试该测的，是"出错时没人会发现的路径"。
+
+  渲染层出错，肉眼能看见；
+  纯函数出错，什么都不发生 —— 只是结果悄悄不对。
+
+  后者才是测试该站的位置。
+
+同理，lint 的价值不在于统一缩进好看，
+而在于把"这次改对了但下次会被改坏"的约定，变成机器检查。
+纯函数不许改入参、配置非法必须返回 null、兜底配置自身必须合法 ——
+这些约定写在注释里会被忘记，写成断言就不会。
+
+================================================================
