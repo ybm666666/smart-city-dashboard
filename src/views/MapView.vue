@@ -106,16 +106,16 @@ function onSelect(name: string) {
 .tools button {
   padding: 4px 12px;
   font-size: 12px;
-  color: #7eb8d8;
-  background: rgba(0, 50, 100, 0.3);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-panel-strong);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 4px;
   cursor: pointer;
 }
 .tools button.active {
-  color: #0a1929;
-  background: #00d4ff;
-  border-color: #00d4ff;
+  color: var(--color-bg-base);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 .stats {
   display: flex;
