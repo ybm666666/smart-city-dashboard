@@ -1,0 +1,258 @@
+================================================================
+Day 14：部署上线与收尾 —— 打包优化、双平台部署、复盘文档
+项目：smart-city-dashboard（AI 数据可视化大屏）
+日期：2026-10-18
+================================================================
+
+【一、今天要干什么】
+
+前两天把「看得见的性能」做完了（骨架屏、路由预取、内联启动骨架）。
+今天做「看不见但长期有效」的部分：
+
+1. 把分包判据从「是什么库」换成「变得多快」
+2. 给体积加一个能进 CI 的回归脚本
+3. 补齐 Vercel 部署配置（GitHub Pages 昨天已经有了）
+4. 写两周迭代的复盘文档
+
+第 4 条是最容易被跳过、但最该写的一条 —— 现在不写，
+过两周就只记得「改了很多配置」，记不得为什么这么改。
+
+
+【二、分包：换了判据】
+
+Day12 我是这么分的：
+
+  - zrender  → 'zrender'
+  - echarts   → 'echarts'
+  - vue / vue-router / pinia → 'vue'
+  - 其他 → 'vendor'
+
+当时想的是「按库的身份分」，够用。但用下来发现一个问题：
+
+  vue-router 和 pinia 的升级节奏跟 vue 本体完全不一样。
+  它们被打进同一个 'vue' 块，意味着 —— 只要装了新版 vue-router，
+  整个 98KB 的 vue 块 hash 全变，用户得重新下载全部。
+
+这等于缓存粒度被「最不稳定的那个」决定了。
+
+Day14 换判断依据，只留一条：
+
+  体积 × 变更频率
+
+  - 体积大 + 几乎不变 → 单独成块，吃长期缓存
+  - 变更频率不同 → 绝不放同一块，否则 hash 互相牵连
+
+于是新的分档：
+
+  zrender          → 'echarts-zrender'   180KB，渲染内核，锁在 echarts 版本里
+  echarts          → 'echarts'           462KB，应用层
+  vue-router/pinia → 'vue-libs'           30KB，独立升级节奏
+  @vue/ 或 vue     → 'vue'                68KB，框架本体
+  axios            → 'http'               51KB，请求基础设施，几乎不随业务改
+  其他             → 'vendor'              1KB
+
+关键点：axios 独立出来之后，首屏干脆不加载它了。
+之前它在 vendor 里，vendor 是首屏预加载的，等于白下 19KB gzip。
+
+
+【三、踩的坑：判断顺序】
+
+这里有个很容易翻车的地方，记下来：
+
+  vue-router 的模块 id 长这样：
+    node_modules/vue-router/dist/vue-router.mjs
+
+  这个字符串里含 "vue"。
+
+  如果我先写 if (id.includes('vue')) return 'vue'，
+  那么 vue-router 和 pinia 会被这个条件先命中，
+  全部吸进 'vue' 块 —— 我的拆分等于白做。
+
+所以顺序必须是：
+
+  if (id.includes('vue-router') || id.includes('pinia')) return 'vue-libs'
+  if (id.includes('@vue/') || id.includes('/vue/'))      return 'vue'
+
+而且是靠 '/vue/' 带斜杠来精确匹配 vue 本体，
+避免 'vue-router'、'vuex'、'vue-i18n' 这类前缀撞车。
+
+一句话：manualChunks 里，越具体的规则越要写在前面。
+
+
+【四、阈值收紧】
+
+chunkSizeWarningLimit 从 600 改成 500。
+
+理由：分档之后按理说不该有块再摸到这条线了。
+阈值不收紧，下次谁悄悄加了个大依赖进来，构建日志也不会吭声。
+警告线要跟着「当前水位」下调，才有预警价值。
+
+
+【五、体积回归脚本】
+
+新增 scripts/analyze-dist.mjs，零依赖，只用 node:fs 和 node:zlib。
+
+为什么自己写：
+
+  rollup-plugin-visualizer 产出的是交互式 HTML 报告。
+  好看，但体积趋势得人去看图 —— 这不是回归，这是观赏。
+
+  收尾阶段真正需要的是一个「能在 CI 里断言的数字」。
+  二十几行 gzip 逻辑，换一个可回归的基线，比多装一个依赖划算。
+
+脚本做三件事：
+
+  1. 读 dist 全部资源，输出原始体积 + 真实 gzip 体积，按体积降序
+  2. 解析 index.html 的 src / modulepreload，标出首屏关键 JS 并汇总
+  3. 单块 gzip 超预算（默认 160KB）时告警
+
+用法：
+  npm run build && npm run analyze
+
+
+【六、实测对比】
+
+同一台机器，npm run build：
+
+  指标                  Day13      Day14      变化
+  --------------------------------------------------------------
+  首屏关键 JS（原始）   150.74kB   101.45kB   -49.29kB (-32.7%)
+  首屏关键 JS（gzip）    58.34kB    40.62kB   -17.72kB (-30.4%)
+  分包数                4 类       6 类       缓存粒度更细
+  chunk 体积告警        无         无         阈值反而收紧了
+
+Day14 分档结果（npm run analyze 输出）：
+
+  echarts           462.47 kB │ gzip: 154.61 kB
+  echarts-zrender   180.24 kB │ gzip:  59.29 kB
+  vue                68.32 kB │ gzip:  27.03 kB   ★首屏
+  http               51.44 kB │ gzip:  19.49 kB
+  vue-libs           29.68 kB │ gzip:  11.82 kB   ★首屏
+  vendor              1.28 kB │ gzip:   0.73 kB
+
+  ✓ built in 7.22s，无 chunk 体积告警
+
+★ = 出现在 index.html 的预加载列表里。
+
+首屏现在只剩 index + vue + vue-libs 三个 JS，gzip 合计 40.62KB。
+echarts 和 axios 都随路由按需加载。
+
+首屏 -49KB 从哪来的？
+  - vue-libs 独立后，首屏不必为 router/pinia 付整块代价
+  - http(axios) 独立后，首屏完全不加载它
+
+注意：这不是「代码变少了」，代码一行没删。
+只是「首屏不需要的，不该在首屏下」。这才是分包的意义。
+
+
+【七、部署：双平台】
+
+GitHub Pages（主站）—— .github/workflows/deploy.yml，推 master 即部署。
+三个容易漏的点，都踩过：
+
+  1. base 必须带仓库名
+     Pages 站点在 /<repo>/ 子路径下，
+     base 不给 '/smart-city-dashboard/'，JS/CSS 全部 404。
+     本地开发还是 '/'，所以要用 process.env.GITHUB_ACTIONS 区分。
+
+  2. 权限必须显式声明
+     pages: write + id-token: write
+     少一个，deploy 步骤直接失败，而且报错信息不太直观。
+
+  3. concurrency 要加 group
+     同一时间只允许一个部署任务。
+     连着推两次，新任务取消旧任务，否则并发部署会互相覆盖。
+
+Vercel（备用）—— 新增 vercel.json：
+
+  - assets/(.*) 打 Cache-Control: immutable 长缓存
+    文件名本身带 hash，天然可以永久缓存
+  - 其余路径 rewrite 到 index.html
+    当前用 hash 路由，其实不依赖 history fallback，
+    但保留这条，以后换 history 模式不用改配置
+  - cleanUrls: true，去掉 .html 后缀
+
+为什么要两个：
+  Pages 免费且与仓库同源，适合当主站。
+  Vercel CDN 节点更近、能自定义 header，适合当演示备用。
+  配置都在仓库里，切换成本为零。
+
+
+【八、复盘文档】
+
+写了 docs/RETROSPECTIVE.md，记录五个真正卡住过的问题：
+
+  1. ECharts 全量引入 → 1MB 单包
+     教训：包体积最大的依赖，先查它的默认入口是不是全家桶
+
+  2. 骨架屏把图表挤闪了
+     根因是骨架和 canvas 同父兄弟节点，一起参与布局
+     改成绝对定位覆盖（inset:0 + pointer-events:none）
+     教训：占位元素不能影响布局，否则它自己就是抖动源
+
+  3. modulepreload 把 CSS 也塞进 head
+     教训：预加载要错了就是纯负收益，默认行为不等于合理行为
+
+  4. 移动端 scale 缩放后字体发虚
+     根因是整体 scale 会二次采样已光栅化文本
+     教训：大屏「自适应」要区分「等比呈现」和「重排」两种意图
+
+  5. SSE 流式把 Markdown 截成半个标记
+     做法：先转义 HTML 再解析，未闭合标记留给下一帧
+     教训：流式场景下，所有「要看到结尾才能确定」的语法都要处理未完成态
+
+还写了「如果重来一次」：
+  第一周就先做「按需引入 + 分包 + 体积脚本」。
+  性能是架构问题，不是收尾工作。把收尾当补课，成本更高。
+
+
+【九、还欠着的】
+
+诚实记一下：
+
+  - 没有自动化测试。全程手点验证。
+    AI 出图的 Schema 降级逻辑最该加单测，目前是纯靠人试。
+
+  - 体积只做了基线告警，没做趋势。
+    理想是把每次构建的首屏 gzip 存成历史曲线，做真正的回归拦截。
+
+  - dayN-*.txt 日志没纳入版本管理，散在本地，
+    检索和协作都不方便，后续应整理进 docs/log/。
+
+  - 地图数据 158KB 未压缩传输。
+    GeoJSON 走 CDN 时开 Brotli 还能再降一截，目前只靠 gzip。
+
+
+【十、今日提交】
+
+  1. build(day14): manualChunks 按更新频率重新分档，
+     新增 vue-libs/http 独立块           →  vite.config.ts
+
+  2. build(day14): 新增 npm run analyze 体积分析脚本  →  package.json
+
+  3. build(day14): 新增 Vercel 部署配置
+     （immutable 静态资源缓存 + SPA rewrite）  →  vercel.json
+
+  4. build(day14): 新增零依赖产物体积分析脚本  →  scripts/analyze-dist.mjs
+
+  5. docs(day14): 新增两周迭代复盘文档          →  docs/RETROSPECTIVE.md
+
+  6. docs(day14): README 补分包判据、
+     体积回归与双平台部署章节                   →  README.md
+
+全部直接提交到 master，作者 ybm666666。
+
+
+【十一、一句话收尾】
+
+前两天在优化「用户看到什么」，
+今天在优化「用户下载什么」和「下次改动能便宜多少」。
+
+首屏 40.62KB gzip，六个分块各司其职，
+构建无告警，体积可回归，两个平台都能一键部署。
+
+两周的项目到这里收口。
+剩下的不是功能，是习惯 —— 测试、趋势、日志归档。
+这些不写在 Day15，写在下一个项目的 Day1。
+
+================================================================
