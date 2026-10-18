@@ -66,7 +66,7 @@ defineEmits<{ (e: 'retry'): void }>()
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 /* Day13：骨架屏态要铺满可用空间，与真实图表区域高度一致 */
@@ -79,13 +79,13 @@ defineEmits<{ (e: 'retry'): void }>()
   box-sizing: border-box;
 }
 .state.error .msg {
-  color: #ff8a8a;
+  color: var(--color-danger);
 }
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid rgba(0, 212, 255, 0.25);
-  border-top-color: #00d4ff;
+  border: 3px solid var(--color-accent-a25);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -97,8 +97,8 @@ defineEmits<{ (e: 'retry'): void }>()
 .retry {
   padding: 5px 16px;
   font-size: 13px;
-  color: #0a1929;
-  background: #00d4ff;
+  color: var(--color-bg-base);
+  background: var(--color-accent);
   border: none;
   border-radius: 4px;
   cursor: pointer;
