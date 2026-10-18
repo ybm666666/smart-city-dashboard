@@ -20,6 +20,7 @@ interface ImportMeta {
 // 让 .vue 文件在 TS 中可被 import
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
-  const component: DefineComponent<{}, {}, any>
+  // SFC 的 props / emits 由各组件自身声明，这里只做「可 import」的最薄声明
+  const component: DefineComponent
   export default component
 }
