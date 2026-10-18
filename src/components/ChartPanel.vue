@@ -57,5 +57,8 @@ h3 {
 .chart-body {
   flex: 1;
   min-height: 0;
+  /* 让图表容器成为独立的布局上下文，配合 BaseChart 的绝对定位铺满，
+     避免百分比高度在 auto 父级下解析失败导致画布塌陷 */
+  display: flex;
 }
 </style>
