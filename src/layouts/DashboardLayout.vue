@@ -38,7 +38,7 @@ const screenStyle = computed(() =>
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #0a1929;
+  background: var(--color-bg-base);
 }
 /* Day6：流式模式允许纵向滚动，避免小屏内容被裁切 */
 .scale-wrapper.flow {
@@ -49,7 +49,7 @@ const screenStyle = computed(() =>
 }
 .screen {
   transform-origin: center center;
-  background: linear-gradient(135deg, #0a1929 0%, #1a2332 100%);
+  background: linear-gradient(135deg, var(--color-bg-base) 0%, var(--color-bg-elevated) 100%);
   display: flex;
   flex-direction: column;
 }
