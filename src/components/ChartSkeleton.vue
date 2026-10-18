@@ -67,7 +67,7 @@ withDefaults(defineProps<Props>(), { variant: 'chart', bars: 5 })
 .sk-line {
   position: relative;
   overflow: hidden;
-  background: rgba(0, 150, 255, 0.12);
+  background: var(--color-blue-a12);
   border-radius: 4px;
 }
 .sk-title::after,
@@ -81,7 +81,7 @@ withDefaults(defineProps<Props>(), { variant: 'chart', bars: 5 })
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(0, 212, 255, 0.22),
+    var(--color-accent-a22),
     transparent
   );
   animation: shimmer 1.4s ease-in-out infinite;
