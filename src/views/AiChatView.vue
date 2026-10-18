@@ -293,16 +293,16 @@ const configJson = computed(() =>
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  background: rgba(0, 50, 100, 0.2);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  background: var(--color-surface-panel);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 8px;
   min-height: 0;
 }
 .new-btn {
   padding: 8px 10px;
   font-size: 13px;
-  color: #0a1929;
-  background: #00d4ff;
+  color: var(--color-bg-base);
+  background: var(--color-accent);
   border: none;
   border-radius: 6px;
   font-weight: 600;
@@ -329,18 +329,18 @@ const configJson = computed(() =>
   padding: 7px 8px;
   border-radius: 6px;
   font-size: 13px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   cursor: pointer;
   border: 1px solid transparent;
 }
 .session-item:hover {
-  background: rgba(0, 150, 255, 0.12);
-  color: #b8e4ff;
+  background: var(--color-blue-a12);
+  color: var(--color-accent-pale);
 }
 .session-item.active {
-  background: rgba(0, 212, 255, 0.16);
-  border-color: rgba(0, 212, 255, 0.5);
-  color: #00d4ff;
+  background: var(--color-accent-a16);
+  border-color: var(--color-accent-a50);
+  color: var(--color-accent);
 }
 .session-title {
   flex: 1;
@@ -363,29 +363,29 @@ const configJson = computed(() =>
   padding: 0;
   line-height: 1;
   font-size: 12px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   background: transparent;
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 4px;
   cursor: pointer;
 }
 .icon-btn:hover {
-  color: #00d4ff;
-  border-color: #00d4ff;
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 .rename-input {
   width: 100%;
   padding: 3px 6px;
   font-size: 13px;
-  color: #e0e6ed;
-  background: rgba(0, 20, 40, 0.8);
-  border: 1px solid #00d4ff;
+  color: var(--color-text-primary);
+  background: var(--color-surface-overlay-heavy);
+  border: 1px solid var(--color-accent);
   border-radius: 4px;
   outline: none;
 }
 .session-count {
   font-size: 11px;
-  color: #5f8bab;
+  color: var(--color-text-muted);
   text-align: center;
 }
 /* 对话 / 预览 */
@@ -404,11 +404,11 @@ const configJson = computed(() =>
   gap: 10px;
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px dashed rgba(0, 150, 255, 0.25);
+  border-bottom: 1px dashed var(--color-blue-a25);
 }
 .cur-title {
   font-size: 13px;
-  color: #9fe6ff;
+  color: var(--color-accent-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -417,15 +417,15 @@ const configJson = computed(() =>
   flex: none;
   padding: 3px 10px;
   font-size: 12px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   background: transparent;
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 4px;
   cursor: pointer;
 }
 .ghost:hover:not(:disabled) {
-  color: #00d4ff;
-  border-color: #00d4ff;
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 .ghost:disabled {
   opacity: 0.4;
@@ -438,12 +438,12 @@ const configJson = computed(() =>
 }
 .tip {
   font-size: 12px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   margin-bottom: 10px;
   line-height: 1.5;
 }
 .tip code {
-  color: #00d4ff;
+  color: var(--color-accent);
 }
 .examples {
   display: flex;
@@ -459,22 +459,22 @@ const configJson = computed(() =>
 }
 .examples .label {
   font-size: 12px;
-  color: #5f8bab;
+  color: var(--color-text-muted);
   min-width: 28px;
 }
 .chip {
   padding: 4px 10px;
   font-size: 12px;
-  color: #7eb8d8;
-  background: rgba(0, 150, 255, 0.1);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  color: var(--color-text-secondary);
+  background: var(--color-blue-a10);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 20px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .chip:hover {
-  color: #00d4ff;
-  border-color: #00d4ff;
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 .msg {
   padding: 8px 12px;
@@ -485,16 +485,16 @@ const configJson = computed(() =>
   line-height: 1.5;
 }
 .msg.user {
-  background: rgba(0, 212, 255, 0.15);
-  color: #e0e6ed;
+  background: var(--color-accent-a15);
+  color: var(--color-text-primary);
   margin-left: auto;
 }
 .msg.assistant {
-  background: rgba(0, 255, 136, 0.1);
-  color: #d6ffe9;
+  background: var(--color-success-a10);
+  color: var(--color-success-text);
 }
 .typing {
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
 }
 /* Day11：流式光标 */
 .caret {
@@ -503,7 +503,7 @@ const configJson = computed(() =>
   height: 1em;
   margin-left: 2px;
   vertical-align: text-bottom;
-  background: #00d4ff;
+  background: var(--color-accent);
   animation: blink 1s steps(2, start) infinite;
 }
 @keyframes blink {
@@ -514,7 +514,7 @@ const configJson = computed(() =>
 .interrupted {
   margin-left: 6px;
   font-size: 12px;
-  color: #ffb642;
+  color: var(--color-warning);
   opacity: 0.9;
 }
 /* Day11：Markdown 渲染样式 */
@@ -531,7 +531,7 @@ const configJson = computed(() =>
   margin: 10px 0 6px;
   font-size: 15px;
   font-weight: 600;
-  color: #9fe6ff;
+  color: var(--color-accent-strong);
   line-height: 1.4;
 }
 .md :deep(h1) {
@@ -551,47 +551,47 @@ const configJson = computed(() =>
 .md :deep(code) {
   padding: 1px 5px;
   font-size: 12px;
-  color: #00d4ff;
-  background: rgba(0, 20, 40, 0.7);
+  color: var(--color-accent);
+  background: var(--color-surface-overlay-strong);
   border-radius: 3px;
 }
 .md :deep(pre) {
   margin: 0 0 8px;
   padding: 10px;
   overflow-x: auto;
-  background: rgba(0, 20, 40, 0.7);
-  border: 1px solid rgba(0, 150, 255, 0.2);
+  background: var(--color-surface-overlay-strong);
+  border: 1px solid var(--color-blue-a20);
   border-radius: 6px;
 }
 .md :deep(pre code) {
   padding: 0;
-  color: #9fe6ff;
+  color: var(--color-accent-strong);
   background: transparent;
 }
 .md :deep(blockquote) {
   margin: 0 0 8px;
   padding: 4px 10px;
   font-size: 13px;
-  color: #8fb6cf;
-  border-left: 3px solid rgba(0, 212, 255, 0.5);
-  background: rgba(0, 150, 255, 0.06);
+  color: var(--color-text-dim);
+  border-left: 3px solid var(--color-accent-a50);
+  background: var(--color-blue-a06);
 }
 .md :deep(a) {
-  color: #00d4ff;
+  color: var(--color-accent);
   text-decoration: underline;
 }
 .md :deep(strong) {
-  color: #eaffff;
+  color: var(--color-accent-ghost);
   font-weight: 600;
 }
 .md :deep(hr) {
   margin: 10px 0;
   border: none;
-  border-top: 1px dashed rgba(0, 150, 255, 0.3);
+  border-top: 1px dashed var(--color-blue-a30);
 }
 .stop-btn {
-  background: #ff5c5c !important;
-  color: #fff !important;
+  background: var(--color-danger-strong) !important;
+  color: var(--color-text-inverse) !important;
 }
 .input-bar {
   display: flex;
@@ -600,21 +600,21 @@ const configJson = computed(() =>
 .input-bar input {
   flex: 1;
   padding: 10px;
-  background: rgba(0, 50, 100, 0.3);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  background: var(--color-surface-panel-strong);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 6px;
-  color: #e0e6ed;
+  color: var(--color-text-primary);
   outline: none;
 }
 .input-bar input:focus {
-  border-color: #00d4ff;
+  border-color: var(--color-accent);
 }
 .input-bar button {
   padding: 10px 20px;
-  background: #00d4ff;
+  background: var(--color-accent);
   border: none;
   border-radius: 6px;
-  color: #0a1929;
+  color: var(--color-bg-base);
   font-weight: 600;
   cursor: pointer;
 }
@@ -631,7 +631,7 @@ const configJson = computed(() =>
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  color: #ff9500;
+  color: var(--color-warning-strong);
   margin-bottom: 6px;
 }
 /* Day9：微调栏 */
@@ -641,46 +641,46 @@ const configJson = computed(() =>
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: rgba(0, 50, 100, 0.2);
-  border: 1px solid rgba(0, 150, 255, 0.2);
+  background: var(--color-surface-panel);
+  border: 1px solid var(--color-blue-a20);
   border-radius: 6px;
 }
 .refine-label {
   font-size: 12px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
 }
 .title-input {
   flex: 1;
   min-width: 100px;
   padding: 5px 8px;
   font-size: 12px;
-  background: rgba(0, 20, 40, 0.6);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 4px;
-  color: #e0e6ed;
+  color: var(--color-text-primary);
   outline: none;
 }
 .type-select {
   padding: 5px 8px;
   font-size: 12px;
-  background: rgba(0, 20, 40, 0.6);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 4px;
-  color: #e0e6ed;
+  color: var(--color-text-primary);
   outline: none;
 }
 .mini {
   padding: 5px 10px;
   font-size: 12px;
-  color: #00d4ff;
-  background: rgba(0, 150, 255, 0.1);
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  color: var(--color-accent);
+  background: var(--color-blue-a10);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .mini:hover {
-  border-color: #00d4ff;
+  border-color: var(--color-accent);
 }
 /* Day10：错误提示 / 重试 */
 .error-box {
@@ -690,9 +690,9 @@ const configJson = computed(() =>
   gap: 10px;
   padding: 6px 10px;
   font-size: 12px;
-  color: #ff8a8a;
-  background: rgba(255, 80, 80, 0.08);
-  border: 1px solid rgba(255, 100, 100, 0.3);
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
   border-radius: 6px;
 }
 .error-text {
@@ -705,8 +705,8 @@ const configJson = computed(() =>
   padding: 2px 10px;
   font-size: 12px;
   font-weight: 600;
-  color: #0a1929;
-  background: #ffb642;
+  color: var(--color-bg-base);
+  background: var(--color-warning);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -723,9 +723,9 @@ const configJson = computed(() =>
   align-self: flex-start;
   padding: 4px 12px;
   font-size: 12px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   background: transparent;
-  border: 1px solid rgba(0, 150, 255, 0.3);
+  border: 1px solid var(--color-blue-a30);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -735,16 +735,16 @@ const configJson = computed(() =>
   padding: 10px;
   font-size: 12px;
   line-height: 1.5;
-  color: #9fe6ff;
-  background: rgba(0, 20, 40, 0.6);
-  border: 1px solid rgba(0, 150, 255, 0.2);
+  color: var(--color-accent-strong);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-blue-a20);
   border-radius: 6px;
   white-space: pre-wrap;
   word-break: break-all;
 }
 .err {
   font-size: 12px;
-  color: #ff8a8a;
+  color: var(--color-danger);
 }
 @media (max-width: 1100px) {
   .ai {
