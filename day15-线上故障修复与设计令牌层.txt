@@ -1,0 +1,342 @@
+================================================================
+Day 15：线上故障修复与设计令牌层 —— 从「能跑」到「能维护」
+项目：smart-city-dashboard（AI 数据可视化大屏）
+日期：2026-10-18
+================================================================
+
+【一、今天要干什么】
+
+Day14 把部署和复盘收了尾，项目进入 1.0。今天本来只打算开始界面优化，
+结果一上来先撞了个线上 bug —— 这个优先级必须往后放。
+
+今天实际做了四件事：
+
+  1. 修掉线上图表面板空白（真实故障，P0）
+  2. 建一层设计令牌 tokens.css，把颜色/间距/字号收敛成变量
+  3. 修窄屏（<=960px）顶栏与大标题重叠
+  4. 收了一份外部代码评审，据此排出维护期路线
+
+前三件是改代码，第四件不改代码但更重要 ——
+它决定了这个项目是「我自己能跑」，还是「别人也能接」。
+
+
+【二、线上图表空白：百分比高度链塌陷】
+
+现象：
+
+  线上首页的 GDP 折线图、产业结构环形图、区县柱状图，三个面板全是空白。
+  本地 dev 完全正常。图库页也正常。
+
+第一反应是「ECharts 没加载」或者「数据没到」。但图库页用的同一套组件、
+同一份数据源，那边画得出来。所以不是数据问题，也不是依赖问题。
+
+问题定位过程（记下来，这个思路可以复用）：
+
+  第 1 步：看容器实际尺寸。
+    打开 DevTools 量 canvas 的 offsetHeight —— 是 0。
+
+  第 2 步：往上找是谁把它压成 0 的。
+    ECharts 初始化时读容器宽高，容器高 0 → 画布高 0 → 什么都看不见。
+    所以不是 ECharts 的锅，是布局的锅。
+
+  第 3 步：为什么容器高 0？
+    链路上有好几层用了 height: 100%。
+
+      .panel       height: 100%
+      .panel-body  flex: 1
+      .chart-wrap  height: 100%
+
+    这套写法在「父级有确定高度」时成立。
+    但首页的面板栅格是流式布局（grid + auto rows），
+    父级的 height 是 auto —— auto 的 100% 还是 auto，
+    于是整条百分比高度链在某一层断掉，最底下就塌成 0。
+
+  第 4 步：为什么图库页没事？
+    图库页的面板有固定高度（卡片网格），父级高度是确定的，
+    百分比链能一路传下去。所以同一个组件在两种布局下表现不同。
+
+结论：这不是 ECharts 的问题，是「组件假设了父级高度确定」，
+而首页布局没给这个前提。属于组件契约和布局实现之间的错配。
+
+修法（BaseChart.vue / ChartPanel.vue）：
+
+  不再依赖百分比高度链，改成让面板自己撑起高度：
+
+    - ChartPanel 用 min-height 给出下限（不再靠 100% 传递）
+    - 图表容器改成 flex: 1 且 min-height: 0
+      （min-height: 0 是关键，flex 子项默认 min-height: auto，
+        会把内容高度当最小值，导致 flex 撑不开也不收缩）
+    - BaseChart 的 resize 逻辑保留，父级尺寸变化照常响应
+
+经验：
+
+  在一个组件里写 height: 100% 的时候，等于对使用方提了一个隐式要求：
+  「你必须给我一个确定高度的父级」。
+  这个要求不写在 props 里、不写在文档里，只在线上炸的时候才被发现。
+  要么用 min-height 把契约变宽松，要么把要求显式写进注释。
+
+
+【三、设计令牌层：把散落的颜色收进一个文件】
+
+修完 bug 才是今天原定的正事：界面优化第一步。
+
+为什么第一步不是「改好看」，而是「先把变量抽出来」：
+
+  这两个月里颜色是随手写的。'#0b1020'、'#101a33'、'#1b2a4a'
+  这些深蓝散在十几个组件里，深浅不一，其实谁也没记住谁是谁。
+  这种状态下直接调色，只会把新的不一致叠在旧的不一致上。
+
+  所以顺序必须是：先收敛，再调整。
+
+做法：
+
+  新建 src/assets/tokens.css，60 个令牌，分四组：
+
+    颜色
+      --color-bg-base        页面底色
+      --color-bg-panel       面板底
+      --color-bg-elevated    浮起层（tooltip / 弹层）
+      --color-border         描边
+      --color-text-primary   主文字
+      --color-text-secondary 次要文字
+      --color-text-muted     弱化文字
+      --color-accent         主强调（青蓝）
+      --color-accent-warm    次强调（橙，用于告警/对比）
+      --color-success / --color-warning / --color-danger
+
+    间距（4px 基准，避免出现 7px、13px 这种随手值）
+      --space-1 4px
+      --space-2 8px
+      --space-3 12px
+      --space-4 16px
+      --space-5 24px
+      --space-6 32px
+
+    字号
+      --font-xs / --font-sm / --font-base / --font-lg / --font-xl / --font-2xl
+
+    圆角 / 阴影 / 动效时长
+      --radius-sm / --radius-md / --radius-lg
+      --shadow-panel / --shadow-float
+      --duration-fast / --duration-base
+
+  然后在 main.css 里 @import 进来，其余组件只允许用 var(--xxx)。
+
+改造范围（12 个文件，一个个提，每个 commit 只做一件事）：
+
+    tokens.css            新建
+    main.css              引入令牌
+    AppHeader.vue         顶栏
+    ChartPanel.vue        图表面板
+    ChartSkeleton.vue     骨架屏
+    IndicatorBar.vue      指标条
+    MapChart.vue          地图
+    PanelState.vue        空/错/加载态
+    StatIndicator.vue     统计块
+    DashboardLayout.vue   布局
+    AiChatView.vue        AI 对话页
+    MapView.vue           地图页
+
+验收方式是机械的、可复现的：
+
+    令牌定义 60 个
+    组件引用 39 处
+    未定义变量 0 个
+    残留硬编码色值 0 处
+
+前两条证明「铺开了」，后两条证明「没有半途而废」。
+「残留硬编码色值 0 处」这条尤其重要 —— 抽变量最怕的就是抽一半，
+剩下一半硬编码，那令牌层就只是多了一层间接，反而更难维护。
+
+
+【四、窄屏顶栏重叠】
+
+顶栏是三段式：左边导航、中间大标题、右边时间戳。
+
+宽屏下用 flex 排一行，看着正常。
+窄屏下标题字号是 clamp() 出来的，会把中间挤宽，
+结果标题压到左边导航上，时间戳也顶到标题上。
+
+修法：
+
+  @media (max-width: 960px) 下改成纵向堆叠：
+
+    第 1 行：导航
+    第 2 行：大标题
+    第 3 行：时间戳
+
+  并给标题加 min-width: 0 / overflow 处理，防止它把行撑破。
+
+经验：
+
+  用 clamp() 做流体字号的时候，要注意它影响的不只是"看着多大"，
+  还影响「占多宽」。字号一变，flex 的分配比例就变了，
+  原本够用的间距可能突然不够。
+  响应式不能只在小屏加媒体查询，得先想清楚哪一层先崩。
+
+
+【五、一份外部代码评审】
+
+今天收到一份很认真的评审，读完比我预想的更有用 —— 因为它没夸我，
+而是直接指出了两条硬缺口。
+
+它肯定的部分（大致对得上我的自我认知）：
+
+  - 分层清晰，依赖方向干净。chartSchema / chartOps / chatSession
+    是纯函数 + 零依赖，不绑 Vue / Pinia，天然可测可复用。
+  - 防御到位：LLM 返回的配置走 extractJson → validateChartConfig
+    → fallbackChartConfig 三层护栏，非法配置不崩页。
+  - localStorage 反序列化逐字段校验，脏数据不进 store。
+  - Markdown 渲染先转义 + 链接协议白名单，XSS 从根上堵。
+  - 生命周期严谨：dispose / resize / observer.disconnect、
+    定时器清理、路由离开 stopRealtime。
+  - 性能工程：按需引入、manualChunks 按「体积 × 变更频率」分档、
+    IntersectionObserver 懒渲染、路由懒加载 + hover 预取、骨架屏。
+  - 工程规范：conventional commit、README 带目录树、复盘文档、
+    CI 最小权限 + 并发控制 + npm ci。
+
+它指出的缺口，按优先级：
+
+  🔴 高：全项目零单元测试
+        chartOps / chartSchema / chatSession 是纯函数，
+        是理想的单测对象。至少该覆盖「校验降级」和「微调」两条核心链。
+        这两条一旦坏了，用户看到的是「AI 出图瞎了」，
+        但代码不会报错、CI 也不会红 —— 这才是最危险的。
+
+  🔴 高：没有 ESLint + Prettier
+        现在是靠自觉。别人接手第一件事就是格式不一致。
+        而且该在 CI 里跑 lint，不然规范只是口头约定。
+
+  🟡 中：AiChatView 消息列表用 :key="i"
+        索引作 key，配合流式 append / 清空 / 重命名，
+        存在重渲染错位隐患。应改用消息 id 或内容指纹。
+
+  🟡 中：版本号一直是 0.1.0
+        从没动过。维护期应该走语义化版本 + CHANGELOG。
+
+  🟡 中：sourcemap 恒为 false
+        线上出问题没法定位。应改成环境变量控制，
+        开发/排障开，默认关。
+
+  🟢 低：缺全局错误兜底
+        没有 ErrorBoundary / window.onerror，
+        未捕获异常会直接崩白屏。
+
+  🟢 低：依赖用宽松 ^
+        已有 npm ci + lockfile 兜底，但建议固定 echarts / vue
+        这类核心依赖的小版本范围。
+
+我对这份评审的态度：
+
+  它说的两条高优先级，我认。尤其是「纯函数零测试」这条 ——
+  我以前觉得纯函数好测所以不用测，这个想法是错的。
+  好测 ≠ 已经测了。纯函数的价值在于「测试成本低」，
+  不等于「不需要测试」。降级链这种逻辑，靠人肉点页面是测不全的。
+
+  中优先级那三条，其实都是小改动，可以攒成一个小迭代一次清掉。
+
+
+【六、维护期路线】
+
+按评审排出三步：
+
+  第一步（本周）：补测试 + lint
+    这是唯一的硬缺口。不影响现在跑，但影响能不能交出去。
+    - 装 vitest，先测 chartOps 的微调、chartSchema 的校验降级
+    - 装 @vue/eslint-config-typescript + Prettier
+    - CI 里加 lint + test 两个 step
+
+  第二步：补 CHANGELOG + 版本化流程
+    把 docs/RETROSPECTIVE.md 的节奏延续成正式的维护记录。
+    每次发版 version + CHANGELOG 一起动。
+
+  第三步：清掉三个中优先级小修
+    - :key="i" → 消息 id
+    - sourcemap 走环境变量
+    - 版本号真正开始走
+
+关于后续形态，今天也把方向定清楚了：
+
+  这个项目的最终形态是「一个大屏 exe + 一个小程序」，两端互通。
+  小程序不做大屏的复刻，定位是轻量展示版 ——
+  竖屏卡片流，共享同一套数据层和图表 schema，UI 各自实现。
+
+  这条定位对今天的工作有直接影响：
+  设计令牌层不能只服务 Web。颜色/间距/字号这些语义命名
+  （--color-accent、--space-4）本身是跨端的，
+  web 用 CSS 变量，小程序转换成 wxss 变量，语义一致、实现分离。
+  这就是为什么令牌要按「语义」命名，而不是按「具体值」命名 ——
+  --color-bg-panel 在两端都能用，--dark-blue-900 就绑死了。
+
+
+【七、今天的坑】
+
+1. GitHub 网页编辑器粘贴重复
+   往 CodeMirror 里粘整份文件，有几次粘出来是两份内容
+   （脚本块和样式块各出现两次）。
+   原因应该是 rich content 粘贴失败后回退到了纯文本通道，多执行了一次。
+   办法：先全选清空，再单次粘贴，粘完看行数对不对。
+   ChartSkeleton.vue 那次就从 153 行涨到 273 行，一眼能看出来。
+
+2. 沙箱外挂盘对 .git 写入报 I/O error
+   在沙箱里对 /mnt/local 的仓库做 git 操作，index 文件写坏了
+   （index file smaller than expected），index.lock 也删不掉。
+   原因是挂载盘的 FUSE 层对 .git 内部文件写入报 EIO。
+   处理：停止从沙箱侧动 .git，改由本机执行
+   git reset --hard origin/master，一次就对上了。
+
+   学到一条规则：跨挂载点做 git 操作不可靠，
+   git 的索引文件需要随机的原地读写，FUSE 层不一定支持。
+
+3. 提交记录中间状态显示红叉
+   提交列表看到一排红叉，以为是提交出问题。
+   实际上那是中间提交的 CI 快照 —— 每个文件单独提交，
+   中间某几次提交时代码还没补齐，构建自然失败。
+   最后一条提交是绿的、部署是成功的，就说明没问题。
+   这个也值得记：一次改多文件时，中间提交天然可能是坏状态。
+
+
+【八、收尾状态】
+
+  提交（今天，master）：
+    2dfafcb  修复图表面板高度塌陷（BaseChart）
+    46974cc  修复图表面板高度塌陷（ChartPanel）
+    6d175da  feat(ui): 新增设计令牌层 tokens.css
+    d3f9791  refactor(ui): main.css 引入设计令牌层
+    b7a1ecc  refactor(ui): AppHeader.vue 样式改用设计令牌变量
+    2f77a35  refactor(ui): ChartPanel.vue 样式改用设计令牌变量
+    a6b66a6  refactor(ui): ChartSkeleton.vue 样式改用设计令牌变量
+    f02f0c6  refactor(ui): IndicatorBar.vue 样式改用设计令牌变量
+    db794a6  refactor(ui): MapChart.vue 样式改用设计令牌变量
+    a0859e7  refactor(ui): PanelState.vue 样式改用设计令牌变量
+    5c70bd5  refactor(ui): StatIndicator.vue 样式改用设计令牌变量
+    5d98295  refactor(ui): DashboardLayout.vue 样式改用设计令牌变量
+    7472633  refactor(ui): AiChatView.vue 样式改用设计令牌变量
+    1be1702  refactor(ui): MapView.vue 样式改用设计令牌变量
+    d3d0c48  fix(ui): 修复窄屏下顶栏导航与大标题重叠
+
+  CI：Run 25 ~ 37 全部 completed successfully
+  线上：首页 / 地图 / 图库 / AI 对话，四页渲染正常
+        图表三块恢复渲染，窄屏顶栏三段纵向堆叠不重叠
+  本地：HEAD = d3d0c48 = origin/master，工作区干净
+
+  线上地址：https://ybm666666.github.io/smart-city-dashboard/
+
+
+【九、明天】
+
+  1. 装 vitest，先给 chartOps / chartSchema 写第一组测试
+     （校验降级 + 微调这两条链优先）
+  2. 装 ESLint + Prettier，跑一遍全量格式化，
+     单独一条 style 提交，别和逻辑混
+  3. CI 加 lint + test 两个 step
+  4. 顺手清掉 :key="i"
+
+  今天最大的收获不是修了 bug、也不是铺了令牌，是那句评审提醒：
+
+    「好测 ≠ 已经测了」
+
+  纯函数的价值是「测试便宜」，不是「不用测试」。
+  这个认知差，大概就是「能写项目」和「能维护项目」之间的那条线。
+
+================================================================
