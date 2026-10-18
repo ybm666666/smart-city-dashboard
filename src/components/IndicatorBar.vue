@@ -23,7 +23,7 @@ const { indicatorList } = storeToRefs(store)
   display: flex;
   justify-content: space-around;
   padding: 15px 40px;
-  background: rgba(0, 50, 100, 0.2);
-  border-top: 1px solid rgba(0, 150, 255, 0.3);
+  background: var(--color-surface-panel);
+  border-top: 1px solid var(--color-blue-a30);
 }
 </style>
