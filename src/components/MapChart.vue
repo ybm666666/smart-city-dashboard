@@ -71,14 +71,14 @@ function onChartClick(params: { name?: string }) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: #7eb8d8;
+  color: var(--color-text-secondary);
   font-size: 13px;
 }
 .map-state.error {
-  color: #ff8a8a;
+  color: var(--color-danger);
 }
 .map-state .hint {
   font-size: 12px;
-  color: #5b7f9c;
+  color: var(--color-text-subtle);
 }
 </style>
